@@ -35,7 +35,9 @@ function Set-RegValue {
 
     $regPath = $Matches[1] + '\' + $Matches[2]
     $reg = Join-Path $env:SystemRoot 'System32\reg.exe'
-    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1
+    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
+    $ErrorActionPreference = 'Continue'
+    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1 | ForEach-Object { "$_" }
     if ($LASTEXITCODE -eq 0) {
         return
     }

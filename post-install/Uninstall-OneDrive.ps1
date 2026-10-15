@@ -37,14 +37,21 @@ function Stop-OneDriveProcess {
     $procs | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
+function Invoke-NativeContinue {
+    param([Parameter(Mandatory)][scriptblock] $Command)
+    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
+    $ErrorActionPreference = 'Continue'
+    & $Command | ForEach-Object { "$_" }
+}
+
 function Invoke-RegQuiet {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]] $RegArgs)
-    & reg.exe @RegArgs 2>&1 | Out-Null
+    Invoke-NativeContinue { & reg.exe @RegArgs 2>&1 | Out-Null }
 }
 
 function Clear-OneDriveRunKey {
     param([Parameter(Mandatory)][string] $KeyPath)
-    $query = & reg.exe query $KeyPath 2>&1
+    $query = Invoke-NativeContinue { & reg.exe query $KeyPath 2>&1 }
     if ($LASTEXITCODE -ne 0) {
         return
     }
@@ -71,8 +78,8 @@ function Remove-OneDriveTree {
 
     Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path) {
-        & takeown.exe /F $Path /A /R /D Y 2>&1 | Out-Null
-        & icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C 2>&1 | Out-Null
+        Invoke-NativeContinue { & takeown.exe /F $Path /A /R /D Y 2>&1 | Out-Null }
+        Invoke-NativeContinue { & icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C 2>&1 | Out-Null }
         Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -181,8 +188,8 @@ function Remove-TrustedInstallerFile {
         return
     }
 
-    & takeown.exe /F $Path /A 2>&1 | Out-Null
-    & icacls.exe $Path /grant '*S-1-5-32-544:F' 2>&1 | Out-Null
+    Invoke-NativeContinue { & takeown.exe /F $Path /A 2>&1 | Out-Null }
+    Invoke-NativeContinue { & icacls.exe $Path /grant '*S-1-5-32-544:F' 2>&1 | Out-Null }
     Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         Write-Output "OneDrive setup still present: $Path"
@@ -338,7 +345,7 @@ function Invoke-OneDrivePurge {
 
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if ($winget) {
-        $wingetOut = & $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity 2>&1
+        $wingetOut = Invoke-NativeContinue { & $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity 2>&1 }
         if ($LASTEXITCODE -eq 0) {
             Write-Output 'winget: Microsoft.OneDrive uninstalled'
         }
