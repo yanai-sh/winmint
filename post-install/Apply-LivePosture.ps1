@@ -6,7 +6,7 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated from this directory, after Windows Update.
-  Each script also runs on its own.
+  Each script also runs on its own. Registry tasks are the files in registry\.
   -DryRun prints the changes and writes nothing.
   -Drivers also installs the Surface catalog MSI. It is off unless you pass it.
 

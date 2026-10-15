@@ -20,7 +20,7 @@ powershell -NoProfile -File .\Apply-LivePosture.ps1
 
 `-DryRun` prints the planned changes and writes nothing. Pass `-Drivers` to include the Surface Laptop 7 ARM64 catalog MSI. Sign out after a real run. Language, time zone, UAC, Reserved Storage, and location stay as they are.
 
-Each script also runs on its own: `Apply-Registry.ps1`, `Uninstall-OneDrive.ps1`, `Remove-InboxApps.ps1`, `Install-SurfaceDrivers.ps1`.
+Each script also runs on its own. Registry tasks are the files in `post-install/registry/`. `Apply-Registry.ps1` runs those tasks.
 
 ## Output ISO
 
