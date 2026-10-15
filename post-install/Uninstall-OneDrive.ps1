@@ -6,9 +6,13 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
+  This file stands alone. The working directory does not matter.
   Files that were stored inside an OneDrive folder are moved into the normal
   profile folders first. The OneDrive directory is then deleted.
+  A hidden OneDrive metadata folder stays with that directory and is deleted with it.
+  OneDriveTemp is deleted without moving its contents.
   Sync is blocked, and known folders are pointed at the normal profile paths.
+  A second run leaves OneDrive uninstalled and writes the same policies.
   -DryRun lists what would be removed and changes nothing.
 #>
 param([switch] $DryRun)
@@ -33,6 +37,11 @@ function Stop-OneDriveProcess {
     $procs | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
+function Invoke-RegQuiet {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]] $RegArgs)
+    & reg.exe @RegArgs 2>&1 | Out-Null
+}
+
 function Clear-OneDriveRunKey {
     param([Parameter(Mandatory)][string] $KeyPath)
     $query = & reg.exe query $KeyPath 2>&1
@@ -48,7 +57,7 @@ function Clear-OneDriveRunKey {
         $name = $Matches[1]
         $data = $Matches[2]
         if ($name -like '*OneDrive*' -or $data -like '*OneDrive*') {
-            & reg.exe delete $KeyPath /v $name /f | Out-Null
+            Invoke-RegQuiet delete $KeyPath /v $name /f
             Write-Output "cleared $KeyPath\$name"
         }
     }
@@ -62,8 +71,8 @@ function Remove-OneDriveTree {
 
     Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path) {
-        & takeown.exe /F $Path /A /R /D Y | Out-Null
-        & icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+        & takeown.exe /F $Path /A /R /D Y 2>&1 | Out-Null
+        & icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C 2>&1 | Out-Null
         Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -97,6 +106,11 @@ function Move-OneDriveChildren {
 
     foreach ($child in @(Get-ChildItem -LiteralPath $Source -Force -ErrorAction SilentlyContinue)) {
         if ($child.Name -eq 'desktop.ini') {
+            continue
+        }
+
+        # OneDrive's own metadata directory. It is deleted with the OneDrive root.
+        if ($child.Name -match '^\.[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$') {
             continue
         }
 
@@ -167,8 +181,8 @@ function Remove-TrustedInstallerFile {
         return
     }
 
-    & takeown.exe /F $Path /A | Out-Null
-    & icacls.exe $Path /grant '*S-1-5-32-544:F' | Out-Null
+    & takeown.exe /F $Path /A 2>&1 | Out-Null
+    & icacls.exe $Path /grant '*S-1-5-32-544:F' 2>&1 | Out-Null
     Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         Write-Output "OneDrive setup still present: $Path"
@@ -257,7 +271,12 @@ function Invoke-OneDrivePurge {
                 }
 
                 foreach ($root in @(Get-OneDriveRoots -ProfileRoot $userDir.FullName)) {
-                    Write-Output "dry-run: move files out of $($root.FullName), then delete it"
+                    if ($root.Name -eq 'OneDriveTemp') {
+                        Write-Output "dry-run: delete $($root.FullName)"
+                    }
+                    else {
+                        Write-Output "dry-run: move files out of $($root.FullName), then delete it"
+                    }
                 }
 
                 foreach ($client in @(
@@ -280,13 +299,13 @@ function Invoke-OneDrivePurge {
 
     Stop-OneDriveProcess
 
-    $setups = [System.Collections.Generic.List[string]]::new()
+    $setups = @()
     foreach ($setup in @(
             (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe')
             (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
         )) {
         if (Test-Path -LiteralPath $setup -PathType Leaf) {
-            $setups.Add($setup)
+            $setups += $setup
         }
     }
 
@@ -300,7 +319,7 @@ function Invoke-OneDrivePurge {
             $userSetup = Join-Path $userDir.FullName 'AppData\Local\Microsoft\OneDrive'
             if (Test-Path -LiteralPath $userSetup) {
                 foreach ($found in @(Get-ChildItem -LiteralPath $userSetup -Filter 'OneDriveSetup.exe' -Recurse -File -ErrorAction SilentlyContinue)) {
-                    $setups.Add($found.FullName)
+                    $setups += $found.FullName
                 }
             }
         }
@@ -319,8 +338,22 @@ function Invoke-OneDrivePurge {
 
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if ($winget) {
-        & $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity
-        Write-Output "winget OneDrive exit $LASTEXITCODE"
+        $wingetOut = & $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Output 'winget: Microsoft.OneDrive uninstalled'
+        }
+        elseif ($LASTEXITCODE -eq -1978335212 -or $LASTEXITCODE -eq 2316632084) {
+            Write-Output 'winget: Microsoft.OneDrive is not installed'
+        }
+        else {
+            Write-Output "winget OneDrive exit $LASTEXITCODE"
+            foreach ($line in @($wingetOut)) {
+                $text = "$line".Trim()
+                if ($text) {
+                    Write-Output $text
+                }
+            }
+        }
     }
 
     Stop-OneDriveProcess
@@ -353,16 +386,24 @@ function Invoke-OneDrivePurge {
     $loadedDefault = $false
     try {
         if (Test-Path -LiteralPath $defaultHive -PathType Leaf) {
-            & reg.exe load HKU\WinMintDefault $defaultHive | Out-Null
+            Invoke-RegQuiet query HKU\WinMintDefault
+            if ($LASTEXITCODE -eq 0) {
+                Invoke-RegQuiet unload HKU\WinMintDefault
+            }
+
+            Invoke-RegQuiet load HKU\WinMintDefault $defaultHive
             if ($LASTEXITCODE -eq 0) {
                 $loadedDefault = $true
                 Clear-OneDriveRunKey -KeyPath 'HKU\WinMintDefault\Software\Microsoft\Windows\CurrentVersion\Run'
                 Clear-OneDriveRunKey -KeyPath 'HKU\WinMintDefault\Software\Microsoft\Windows\CurrentVersion\RunOnce'
-                & reg.exe delete 'HKU\WinMintDefault\Software\Microsoft\OneDrive' /f | Out-Null
-                & reg.exe delete 'HKU\WinMintDefault\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' /f | Out-Null
+                Invoke-RegQuiet delete 'HKU\WinMintDefault\Software\Microsoft\OneDrive' /f
+                Invoke-RegQuiet delete 'HKU\WinMintDefault\Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{018D5C66-4533-4307-9B53-224DE2ED1FE6}' /f
                 foreach ($envName in @('OneDrive', 'OneDriveConsumer', 'OneDriveCommercial')) {
-                    & reg.exe delete 'HKU\WinMintDefault\Environment' /v $envName /f | Out-Null
+                    Invoke-RegQuiet delete 'HKU\WinMintDefault\Environment' /v $envName /f
                 }
+            }
+            else {
+                Write-Output 'default user hive was not loaded. Default-profile OneDrive cleanup skipped.'
             }
         }
     }
@@ -370,7 +411,7 @@ function Invoke-OneDrivePurge {
         if ($loadedDefault) {
             [gc]::Collect()
             [gc]::WaitForPendingFinalizers()
-            & reg.exe unload HKU\WinMintDefault | Out-Null
+            Invoke-RegQuiet unload HKU\WinMintDefault
         }
     }
 
@@ -381,17 +422,17 @@ function Invoke-OneDrivePurge {
         Remove-TrustedInstallerFile -Path $setup
     }
 
-    $clientDirs = [System.Collections.Generic.List[string]]::new()
-    $clientDirs.Add((Join-Path $env:ProgramData 'Microsoft OneDrive'))
-    $clientDirs.Add((Join-Path $env:ProgramData 'Microsoft\OneDrive'))
+    $clientDirs = @()
+    $clientDirs += (Join-Path $env:ProgramData 'Microsoft OneDrive')
+    $clientDirs += (Join-Path $env:ProgramData 'Microsoft\OneDrive')
     $programFiles = $env:ProgramFiles
     if ($programFiles) {
-        $clientDirs.Add((Join-Path $programFiles 'Microsoft OneDrive'))
+        $clientDirs += (Join-Path $programFiles 'Microsoft OneDrive')
     }
 
     $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     if ($programFilesX86) {
-        $clientDirs.Add((Join-Path $programFilesX86 'Microsoft OneDrive'))
+        $clientDirs += (Join-Path $programFilesX86 'Microsoft OneDrive')
     }
 
     if (Test-Path -LiteralPath $usersRoot) {
@@ -400,11 +441,14 @@ function Invoke-OneDrivePurge {
                 continue
             }
 
-            $clientDirs.Add((Join-Path $userDir.FullName 'AppData\Local\Microsoft\OneDrive'))
-            $clientDirs.Add((Join-Path $userDir.FullName 'AppData\Roaming\Microsoft\OneDrive'))
+            $clientDirs += (Join-Path $userDir.FullName 'AppData\Local\Microsoft\OneDrive')
+            $clientDirs += (Join-Path $userDir.FullName 'AppData\Roaming\Microsoft\OneDrive')
             foreach ($root in @(Get-OneDriveRoots -ProfileRoot $userDir.FullName)) {
-                Move-OneDriveChildren -Source $root.FullName -Destination $userDir.FullName
-                $clientDirs.Add($root.FullName)
+                if ($root.Name -ne 'OneDriveTemp') {
+                    Move-OneDriveChildren -Source $root.FullName -Destination $userDir.FullName
+                }
+
+                $clientDirs += $root.FullName
             }
         }
     }
@@ -415,7 +459,7 @@ function Invoke-OneDrivePurge {
         Remove-OneDriveTree -Path $dir
     }
 
-    $shortcutRoots = [System.Collections.Generic.List[string]]::new()
+    $shortcutRoots = @()
     foreach ($root in @(
             [Environment]::GetFolderPath('Desktop')
             [Environment]::GetFolderPath('CommonDesktopDirectory')
@@ -425,7 +469,7 @@ function Invoke-OneDrivePurge {
             (Join-Path $env:SystemDrive 'Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu')
         )) {
         if ($root) {
-            $shortcutRoots.Add($root)
+            $shortcutRoots += $root
         }
     }
 
@@ -435,8 +479,8 @@ function Invoke-OneDrivePurge {
                 continue
             }
 
-            $shortcutRoots.Add((Join-Path $userDir.FullName 'Desktop'))
-            $shortcutRoots.Add((Join-Path $userDir.FullName 'AppData\Roaming\Microsoft\Windows\Start Menu'))
+            $shortcutRoots += (Join-Path $userDir.FullName 'Desktop')
+            $shortcutRoots += (Join-Path $userDir.FullName 'AppData\Roaming\Microsoft\Windows\Start Menu')
         }
     }
 
@@ -506,6 +550,11 @@ function Invoke-OneDrivePurge {
     }
 
     foreach ($service in @(Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'OneSyncSvc*' })) {
+        $startType = $service.PSObject.Properties['StartType']
+        if ($null -ne $startType -and [string]$startType.Value -eq 'Disabled') {
+            continue
+        }
+
         Stop-Service -Name $service.Name -Force -ErrorAction SilentlyContinue
         Set-Service -Name $service.Name -StartupType Disabled -ErrorAction SilentlyContinue
         Write-Output "disabled service $($service.Name)"

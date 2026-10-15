@@ -5,8 +5,9 @@
   Run the live posture scripts in order.
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
-  Windows PowerShell 5.1 and PowerShell 7. Run elevated from this directory, after Windows Update.
-  Each script also runs on its own.
+  Windows PowerShell 5.1 and PowerShell 7. Run elevated, after Windows Update.
+  The working directory does not matter. Each child script is found next to this file, then in registry\ beside it.
+  Each script also runs on its own. A second run leaves the same result.
   -DryRun prints the changes and writes nothing.
   -Drivers also installs the Surface catalog MSI. It is off unless you pass it.
 
@@ -27,12 +28,27 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
+function Resolve-SiblingScript {
+    param([Parameter(Mandatory)][string] $Name)
+    $beside = Join-Path $PSScriptRoot $Name
+    if (Test-Path -LiteralPath $beside -PathType Leaf) {
+        return $beside
+    }
+
+    $nested = Join-Path (Join-Path $PSScriptRoot 'registry') $Name
+    if (Test-Path -LiteralPath $nested -PathType Leaf) {
+        return $nested
+    }
+
+    throw "Missing $Name next to this script."
+}
+
 foreach ($name in @(
         'Apply-Registry.ps1'
         'Uninstall-OneDrive.ps1'
         'Remove-InboxApps.ps1'
     )) {
-    $path = Join-Path $PSScriptRoot $name
+    $path = Resolve-SiblingScript -Name $name
     Write-Output "live: $name"
     if ($DryRun) {
         & $path -DryRun
@@ -43,7 +59,7 @@ foreach ($name in @(
 }
 
 if ($Drivers) {
-    $driverScript = Join-Path $PSScriptRoot 'Install-SurfaceDrivers.ps1'
+    $driverScript = Resolve-SiblingScript -Name 'Install-SurfaceDrivers.ps1'
     Write-Output 'live: Install-SurfaceDrivers.ps1'
     if ($DryRun) {
         & $driverScript -DryRun -DeviceId $DeviceId

@@ -6,6 +6,7 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
+  This file stands alone. The working directory does not matter. A second run writes the same values.
   Activity history is off. Clipboard history is left alone.
   Updates still download from Microsoft. This PC does not peer them.
   -DryRun prints each value and writes nothing.
@@ -18,43 +19,51 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
 }
 
 
-function Set-RegDword {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
+function Set-RegValue {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)][string] $Type,
+        [Parameter(Mandatory)][string] $Data
+    )
     if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Value"
+        Write-Output "dry-run: $Path $Name = $Data"
         return
     }
 
-    if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -Path $Path -Force | Out-Null
+    if ($Path -notmatch '^(HKLM|HKCU):\\(.+)$') {
+        throw "Unsupported registry path: $Path"
     }
-    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWord -Force | Out-Null
+
+    $regPath = $Matches[1] + '\' + $Matches[2]
+    $reg = Join-Path $env:SystemRoot 'System32\reg.exe'
+    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        return
+    }
+
+    $text = (@($output) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join ' '
+    if ($text -match 'Access is denied') {
+        Write-Output "left unchanged: $regPath $Name"
+        return
+    }
+
+    throw "Could not set $regPath $Name ($LASTEXITCODE). $text"
+}
+
+function Set-RegDword {
+    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
+    Set-RegValue -Path $Path -Name $Name -Type 'REG_DWORD' -Data "$Value"
 }
 
 function Set-RegString {
     param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Value"
-        return
-    }
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -Path $Path -Force | Out-Null
-    }
-    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType String -Force | Out-Null
+    Set-RegValue -Path $Path -Name $Name -Type 'REG_SZ' -Data $Value
 }
 
 function Set-RegExpand {
     param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Value"
-        return
-    }
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -Path $Path -Force | Out-Null
-    }
-    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType ExpandString -Force | Out-Null
+    Set-RegValue -Path $Path -Name $Name -Type 'REG_EXPAND_SZ' -Data $Value
 }
 
 
