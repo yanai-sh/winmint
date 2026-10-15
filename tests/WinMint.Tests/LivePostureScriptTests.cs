@@ -114,6 +114,10 @@ public class LivePostureScriptTests
         Assert.Contains("Deprovisioned", script, StringComparison.Ordinal);
         Assert.Contains("Clipchamp.Clipchamp_yxz26nhyzhsrt", script, StringComparison.Ordinal);
         Assert.Contains("UseWindowsPowerShell", script, StringComparison.Ordinal);
+        Assert.Contains("dism.exe /Online /Get-ProvisionedAppxPackages /English", script, StringComparison.Ordinal);
+        Assert.Contains("/Remove-ProvisionedAppxPackage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Get-AppxProvisionedPackage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-AppxProvisionedPackage", script, StringComparison.Ordinal);
         HashSet<string> listed = QuotedBlock(script, "$inboxIds = @(");
         HashSet<string> expected = ProductPosture.AppxIds
             .Where(id => !ProductPosture.PreserveAppxSet.Contains(id))

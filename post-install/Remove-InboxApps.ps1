@@ -7,6 +7,8 @@
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Under PowerShell 7, AppX cmdlets load through the Windows PowerShell compatibility session.
+  Provisioned packages are listed and removed with dism.exe. The DISM PowerShell cmdlet
+  fails there with "Class not registered".
   -DryRun reports each app and removes nothing.
 #>
 param([switch] $DryRun)
@@ -25,7 +27,45 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 else {
     Import-Module Appx
 }
-Import-Module Dism
+
+function Get-ProvisionedInboxApps {
+    $output = & dism.exe /Online /Get-ProvisionedAppxPackages /English
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "dism.exe could not list provisioned apps ($LASTEXITCODE)."
+        return @()
+    }
+
+    $apps = New-Object System.Collections.Generic.List[object]
+    $display = ''
+    foreach ($line in @($output)) {
+        if ($line -match '^\s*Display Name\s*:\s*(.*)$') {
+            $display = $Matches[1].Trim()
+            continue
+        }
+
+        if ($line -match '^\s*Package Name\s*:\s*(.*)$') {
+            $packageName = $Matches[1].Trim()
+            if (-not [string]::IsNullOrEmpty($packageName)) {
+                $apps.Add([pscustomobject]@{
+                        DisplayName = $display
+                        PackageName = $packageName
+                    })
+            }
+
+            $display = ''
+        }
+    }
+
+    return @($apps)
+}
+
+function Remove-ProvisionedInboxApp {
+    param([Parameter(Mandatory)][string] $PackageName)
+    & dism.exe /Online /Remove-ProvisionedAppxPackage "/PackageName:$PackageName" /Quiet /English | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output "dism.exe could not remove provisioned $PackageName ($LASTEXITCODE)."
+    }
+}
 
 function Test-CatalogIdMatch {
     param([AllowEmptyString()][string] $Value, [Parameter(Mandatory)][string] $Id)
@@ -97,7 +137,7 @@ function Remove-InboxApp {
         }
 
         $touched = $true
-        Remove-AppxProvisionedPackage -Online -PackageName $packageName -ErrorAction SilentlyContinue | Out-Null
+        Remove-ProvisionedInboxApp -PackageName $packageName
         $parts = $packageName -split '_'
         if ($parts.Count -ge 2 -and $display) {
             $pfns.Add(('{0}_{1}' -f $display, $parts[-1]))
@@ -269,7 +309,7 @@ $inboxIds = @(
 
 if (-not $DryRun) {
     $installedApps = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)
-    $provisionedApps = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
+    $provisionedApps = @(Get-ProvisionedInboxApps)
     foreach ($id in $inboxIds) {
         Remove-InboxApp -Id $id -Installed $installedApps -Provisioned $provisionedApps
     }
@@ -280,7 +320,7 @@ if (-not $DryRun) {
 
 Write-Output 'dry-run: inbox strip. Nothing will be removed.'
 $installedApps = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)
-$provisionedApps = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
+$provisionedApps = @(Get-ProvisionedInboxApps)
 foreach ($id in $inboxIds) {
     $present = $false
     foreach ($pkg in @($installedApps)) {
