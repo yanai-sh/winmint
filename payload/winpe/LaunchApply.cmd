@@ -28,6 +28,13 @@ if not defined INSTALL (
   exit /b 1
 )
 echo WinMint: found install.wim on drive %INSTALL%:
+rem A second boot of this USB must not clean the disk. A finished install turns the PC off.
+if exist "%INSTALL%:\winmint-reinstall.txt" (
+  del /f /q "%INSTALL%:\winmint-reinstall.txt"
+  set REINSTALL=1
+  echo WinMint: reinstall requested. The internal disk will be erased.
+)
+if not defined REINSTALL if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
 set WORK=%TEMP%\winmint
 if not exist "%WORK%" mkdir "%WORK%"
 set LIST=%WORK%\disks.txt
@@ -68,6 +75,8 @@ if defined EXTRA (
   echo Put a unique model substring in %INSTALL%:\winmint-target-disk.txt and reboot.
   exit /b 1
 )
+if not defined REINSTALL call :winmint_see_applied
+if defined HANDED goto :winmint_finished
 echo WinMint: erasing disk %TARGET%
 set DP=%WORK%\diskpart.txt
 > "%DP%" (
@@ -117,9 +126,49 @@ reg add HKLM\WinMintApply\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f
 reg unload HKLM\WinMintApply
+echo WinMint apply complete> "%INSTALL%:\winmint-applied.txt"
+echo WinMint apply complete> "W:\Windows\WinMint.applied"
 echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
 exit /b 0
+
+:winmint_finished
+echo WinMint: already installed. Unplug the USB, then turn the laptop on.
+echo WinMint: the internal disk was not changed.
+wpeutil shutdown
+exit /b 0
+
+:winmint_see_applied
+set HANDED=
+> "%WORK%\parts.txt" (
+  echo select disk %TARGET%
+  echo list partition
+  echo exit
+)
+diskpart /s "%WORK%\parts.txt" > "%WORK%\partsout.txt"
+for /f "usebackq tokens=1,2" %%a in ("%WORK%\partsout.txt") do if /i "%%a"=="Partition" if not "%%b"=="###" call :winmint_probe %%b
+goto :eof
+
+:winmint_probe
+set N=%1
+if exist B:\ goto :eof
+> "%WORK%\as%N%.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo assign letter=B
+  echo exit
+)
+diskpart /s "%WORK%\as%N%.txt" >nul
+if not exist B:\ goto :eof
+if exist B:\Windows\WinMint.applied set HANDED=1
+> "%WORK%\rm%N%.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo remove letter=B
+  echo exit
+)
+diskpart /s "%WORK%\rm%N%.txt" >nul
+goto :eof
 
 rem Keeps a fixed disk as a candidate. USB is excluded categorically, so the installer can never
 rem erase the media it booted from, and disk numbers stay discovered rather than configured.
