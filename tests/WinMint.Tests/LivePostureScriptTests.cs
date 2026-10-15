@@ -9,7 +9,7 @@ public class LivePostureScriptTests
     [Fact]
     public void Registry_script_keeps_the_curated_names()
     {
-        string script = File.ReadAllText(FindRepoFile("tools", "live", "Apply-Registry.ps1"));
+        string script = File.ReadAllText(FindRepoFile("post-install", "Apply-Registry.ps1"));
 
         foreach (string name in new[]
         {
@@ -44,7 +44,7 @@ public class LivePostureScriptTests
     [Fact]
     public void OneDrive_script_purges_the_client_and_leaves_the_user_folder()
     {
-        string script = File.ReadAllText(FindRepoFile("tools", "live", "Uninstall-OneDrive.ps1"));
+        string script = File.ReadAllText(FindRepoFile("post-install", "Uninstall-OneDrive.ps1"));
         Assert.Contains("OneDriveSetup.exe", script, StringComparison.Ordinal);
         Assert.Contains("/uninstall", script, StringComparison.Ordinal);
         Assert.Contains("takeown.exe", script, StringComparison.Ordinal);
@@ -57,7 +57,7 @@ public class LivePostureScriptTests
     [Fact]
     public void Registry_script_lists_the_product_inbox_strip()
     {
-        string script = File.ReadAllText(FindRepoFile("tools", "live", "Remove-InboxApps.ps1"));
+        string script = File.ReadAllText(FindRepoFile("post-install", "Remove-InboxApps.ps1"));
         Assert.Contains("Deprovisioned", script, StringComparison.Ordinal);
         Assert.Contains("Clipchamp.Clipchamp_yxz26nhyzhsrt", script, StringComparison.Ordinal);
         Assert.Contains("UseWindowsPowerShell", script, StringComparison.Ordinal);
@@ -76,7 +76,7 @@ public class LivePostureScriptTests
     [Fact]
     public void Live_scripts_run_on_windows_powershell_and_powershell_7()
     {
-        string live = FindRepoFile("tools", "live");
+        string live = FindRepoFile("post-install");
         string[] names =
         [
             "Apply-LivePosture.ps1",

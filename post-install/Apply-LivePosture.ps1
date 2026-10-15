@@ -4,7 +4,7 @@
 .SYNOPSIS
   Run the live posture scripts in order.
 .DESCRIPTION
-  Windows PowerShell 5.1 and PowerShell 7. Run elevated, after Windows Update.
+  Windows PowerShell 5.1 and PowerShell 7. Run elevated from this directory, after Windows Update.
   Each script also runs on its own.
 
   pwsh -NoProfile -File .\Apply-LivePosture.ps1
