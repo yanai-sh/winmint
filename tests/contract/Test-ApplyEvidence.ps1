@@ -33,6 +33,19 @@ function Copy-Tree([string] $Source, [string] $Dest) {
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
         [IO.File]::Copy($file, $target, $true)
     }
+
+    # The fixture records a digest for out.iso and does not ship the bytes.
+    # Write a stand-in and point evidence at it so -RequireOutputIso can hash the file.
+    $iso = Join-Path $Dest 'out.iso'
+    [IO.File]::WriteAllBytes($iso, [byte[]](0x57, 0x69, 0x6E, 0x4D, 0x69, 0x6E, 0x74))
+    $evidencePath = Join-Path $Dest 'evidence.json'
+    if (Test-Path -LiteralPath $evidencePath -PathType Leaf) {
+        $hash = (Get-FileHash -LiteralPath $iso -Algorithm SHA256).Hash.ToLowerInvariant()
+        $ev = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
+        $ev.outputIsoPath = $iso
+        $ev.digests | Add-Member -NotePropertyName 'outputIso.sha256' -NotePropertyValue $hash -Force
+        ($ev | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $evidencePath -Encoding utf8
+    }
 }
 
 function Invoke-ApplyAssert {
