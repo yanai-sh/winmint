@@ -6,7 +6,9 @@
 .DESCRIPTION
   Windows PowerShell 5.1 and PowerShell 7. Run elevated, after Windows Update.
   Sign out afterward. Leaves UAC, Reserved Storage, language, home region, and time zone alone.
+  -DryRun prints each value and writes nothing.
 #>
+param([switch] $DryRun)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # PowerShell 7 can promote native-command failures into errors. Keep 5.1 behavior.
@@ -16,6 +18,11 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
 
 function Set-RegDword {
     param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -Path $Path -Force | Out-Null
     }
@@ -24,6 +31,11 @@ function Set-RegDword {
 
 function Set-RegString {
     param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -Path $Path -Force | Out-Null
     }
@@ -32,6 +44,11 @@ function Set-RegString {
 
 function Set-RegExpand {
     param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
+    if ($DryRun) {
+        Write-Output "dry-run: $Path $Name = $Value"
+        return
+    }
+
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -Path $Path -Force | Out-Null
     }
@@ -153,4 +170,9 @@ Set-RegExpand 'HKCU:\Environment' 'XDG_DATA_HOME' '%USERPROFILE%\.local\share'
 Set-RegExpand 'HKCU:\Environment' 'XDG_STATE_HOME' '%USERPROFILE%\.local\state'
 Set-RegExpand 'HKCU:\Environment' 'XDG_CACHE_HOME' '%USERPROFILE%\.cache'
 
-Write-Output 'Registry applied. Sign out and back in.'
+if ($DryRun) {
+    Write-Output 'dry-run: registry not written.'
+}
+else {
+    Write-Output 'Registry applied. Sign out and back in.'
+}

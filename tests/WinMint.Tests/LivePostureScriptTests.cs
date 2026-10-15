@@ -88,11 +88,13 @@ public class LivePostureScriptTests
             "Apply-Registry.ps1",
             "Uninstall-OneDrive.ps1",
             "Remove-InboxApps.ps1",
+            "Install-SurfaceDrivers.ps1",
         ];
         foreach (string name in names)
         {
             string script = File.ReadAllText(Path.Combine(live, name));
             Assert.Contains("#requires -Version 5.1", script, StringComparison.Ordinal);
+            Assert.Contains("[switch] $DryRun", script, StringComparison.Ordinal);
             Assert.DoesNotContain("#requires -Version 7", script, StringComparison.Ordinal);
             Assert.DoesNotContain("&&", script, StringComparison.Ordinal);
             Assert.DoesNotContain("??", script, StringComparison.Ordinal);
@@ -102,7 +104,11 @@ public class LivePostureScriptTests
         int registry = orchestrator.IndexOf("Apply-Registry.ps1", StringComparison.Ordinal);
         int oneDrive = orchestrator.IndexOf("Uninstall-OneDrive.ps1", StringComparison.Ordinal);
         int inbox = orchestrator.IndexOf("Remove-InboxApps.ps1", StringComparison.Ordinal);
-        Assert.True(registry >= 0 && registry < oneDrive && oneDrive < inbox);
+        int drivers = orchestrator.LastIndexOf("Install-SurfaceDrivers.ps1", StringComparison.Ordinal);
+        Assert.True(registry >= 0 && registry < oneDrive && oneDrive < inbox && inbox < drivers);
+        Assert.Contains("[switch] $Drivers", orchestrator, StringComparison.Ordinal);
+        Assert.Contains("surface-laptop-7", File.ReadAllText(Path.Combine(live, "Install-SurfaceDrivers.ps1")), StringComparison.Ordinal);
+        Assert.Contains("msiexec.exe", File.ReadAllText(Path.Combine(live, "Install-SurfaceDrivers.ps1")), StringComparison.Ordinal);
     }
 
     private static HashSet<string> QuotedBlock(string script, string marker)

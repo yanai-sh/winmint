@@ -6,7 +6,9 @@
 .DESCRIPTION
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Under PowerShell 7, AppX cmdlets load through the Windows PowerShell compatibility session.
+  -DryRun reports each app and removes nothing.
 #>
+param([switch] $DryRun)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # PowerShell 7 can promote native-command failures into errors. Keep 5.1 behavior.
@@ -264,11 +266,45 @@ $inboxIds = @(
 )
 
 
+if (-not $DryRun) {
+    $installedApps = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)
+    $provisionedApps = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
+    foreach ($id in $inboxIds) {
+        Remove-InboxApp -Id $id -Installed $installedApps -Provisioned $provisionedApps
+    }
+
+    Write-Output 'Inbox apps applied. Sign out and back in.'
+    return
+}
+
+Write-Output 'dry-run: inbox strip. Nothing will be removed.'
 $installedApps = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue)
 $provisionedApps = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
 foreach ($id in $inboxIds) {
-    Remove-InboxApp -Id $id -Installed $installedApps -Provisioned $provisionedApps
+    $present = $false
+    foreach ($pkg in @($installedApps)) {
+        $name = [string] $pkg.Name
+        if ($preserveIds -contains $name) { continue }
+        $hit = (Test-CatalogIdMatch -Value $name -Id $id) -or
+            (Test-CatalogIdMatch -Value ([string] $pkg.PackageFamilyName) -Id $id) -or
+            (Test-CatalogIdMatch -Value ([string] $pkg.PackageFullName) -Id $id)
+        if ($hit) { $present = $true }
+    }
+
+    foreach ($pkg in @($provisionedApps)) {
+        $display = [string] $pkg.DisplayName
+        if ($preserveIds -contains $display) { continue }
+        $hit = (Test-CatalogIdMatch -Value $display -Id $id) -or (Test-CatalogIdMatch -Value ([string] $pkg.PackageName) -Id $id)
+        if ($hit) { $present = $true }
+    }
+
+    if ($present) {
+        Write-Output "dry-run: remove $id"
+    }
+    else {
+        Write-Output "dry-run: absent $id"
+    }
 }
 
-Write-Output 'Inbox apps applied. Sign out and back in.'
+Write-Output 'dry-run: Deprovisioned marks would be written. Inbox apps not removed.'
 

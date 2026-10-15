@@ -9,7 +9,9 @@
   profile folders first. The OneDrive directory is then deleted.
   The disable policies from Apply-Registry.ps1 are written again so OneDrive
   stays blocked.
+  -DryRun lists what would be removed and changes nothing.
 #>
+param([switch] $DryRun)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # PowerShell 7 can promote reg.exe / takeown.exe failures into errors. Keep 5.1 behavior.
@@ -177,6 +179,52 @@ function Remove-TrustedInstallerFile {
 }
 
 function Invoke-OneDrivePurge {
+    if ($DryRun) {
+        Write-Output 'dry-run: OneDrive purge. No files or registry will be changed.'
+        foreach ($setup in @(
+                (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe')
+                (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+            )) {
+            if (Test-Path -LiteralPath $setup) {
+                Write-Output "dry-run: uninstall $setup"
+            }
+            else {
+                Write-Output "dry-run: absent $setup"
+            }
+        }
+
+        if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
+            Write-Output 'dry-run: winget uninstall Microsoft.OneDrive'
+        }
+
+        $usersRoot = Join-Path $env:SystemDrive 'Users'
+        if (Test-Path -LiteralPath $usersRoot) {
+            foreach ($userDir in @(Get-ChildItem -LiteralPath $usersRoot -Directory -ErrorAction SilentlyContinue)) {
+                if ($userDir.Name -in @('Public', 'Default', 'Default User', 'All Users')) {
+                    continue
+                }
+
+                foreach ($root in @(Get-OneDriveRoots -ProfileRoot $userDir.FullName)) {
+                    Write-Output "dry-run: move files out of $($root.FullName), then delete it"
+                }
+
+                foreach ($client in @(
+                        (Join-Path $userDir.FullName 'AppData\Local\Microsoft\OneDrive')
+                        (Join-Path $userDir.FullName 'AppData\Roaming\Microsoft\OneDrive')
+                    )) {
+                    if (Test-Path -LiteralPath $client) {
+                        Write-Output "dry-run: delete $client"
+                    }
+                }
+            }
+        }
+
+        Write-Output 'dry-run: clear OneDrive Run and RunOnce values, shortcuts, sync roots, and navigation-pane entries'
+        Write-Output 'dry-run: disable OneSyncSvc'
+        Write-Output 'dry-run: set HKLM\SOFTWARE\Microsoft\OneDrive PreventNetworkTrafficPreUserSignIn = 1'
+        return
+    }
+
     Stop-OneDriveProcess
 
     $setups = [System.Collections.Generic.List[string]]::new()
@@ -436,4 +484,9 @@ function Invoke-OneDrivePurge {
 
 
 Invoke-OneDrivePurge
-Write-Output 'OneDrive purge applied. Sign out and back in.'
+if ($DryRun) {
+    Write-Output 'dry-run: OneDrive purge not applied.'
+}
+else {
+    Write-Output 'OneDrive purge applied. Sign out and back in.'
+}
