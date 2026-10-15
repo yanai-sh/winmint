@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
+. (Join-Path $PSScriptRoot 'Registry.ps1')
 
 $edge = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
 Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate' 'CreateDesktopShortcutDefault' 0

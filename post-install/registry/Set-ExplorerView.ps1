@@ -15,7 +15,7 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'Registry.ps1')
+. (Join-Path $PSScriptRoot 'Registry.ps1')
 
 $cv = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion'
 Set-RegDword "$cv\Themes\Personalize" 'AppsUseLightTheme' 0

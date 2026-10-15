@@ -14,21 +14,11 @@ public class LivePostureScriptTests
         string orchestrator = File.ReadAllText(Path.Combine(live, "Apply-Registry.ps1"));
         string[] tasks =
         [
-            "Set-QuietTaskbar.ps1",
             "Disable-ConsumerFeatures.ps1",
-            "Set-StoreAutoDownload.ps1",
-            "Set-OneDrivePolicy.ps1",
-            "Disable-DeviceCompanionApps.ps1",
-            "Disable-ActivityHistory.ps1",
-            "Disable-DeliveryOptimization.ps1",
+            "Set-QuietTaskbar.ps1",
             "Disable-EdgePromotions.ps1",
-            "Enable-DeveloperMode.ps1",
-            "Enable-Sudo.ps1",
-            "Enable-LongPaths.ps1",
-            "Disable-Wpbt.ps1",
             "Set-ExplorerView.ps1",
-            "Set-ShellFolders.ps1",
-            "Set-XdgEnvironment.ps1",
+            "Set-SystemPolicy.ps1",
         ];
 
         int last = -1;
@@ -38,9 +28,8 @@ public class LivePostureScriptTests
             int at = orchestrator.IndexOf(task, StringComparison.Ordinal);
             Assert.True(at > last, task);
             last = at;
-            string path = Path.Combine(live, "registry", Path.GetFileNameWithoutExtension(task), task);
+            string path = Path.Combine(live, "registry", task);
             string body = File.ReadAllText(path);
-            Assert.Contains("Split-Path -Parent $PSScriptRoot", body, StringComparison.Ordinal);
             Assert.Contains("Registry.ps1", body, StringComparison.Ordinal);
             script.AppendLine(body);
         }
@@ -55,7 +44,6 @@ public class LivePostureScriptTests
             "PublishUserActivities",
             "UploadUserActivities",
             "DODownloadMode",
-            "DisableFileSyncNGSC",
             "HideFirstRunExperience",
             "LongPathsEnabled",
             "DisableWpbtExecution",
@@ -78,7 +66,7 @@ public class LivePostureScriptTests
 
         Assert.Contains("'EnableActivityFeed' 0", combined, StringComparison.Ordinal);
         Assert.Contains("'DODownloadMode' 0", combined, StringComparison.Ordinal);
-        Assert.Contains("'Enabled' 3", File.ReadAllText(Path.Combine(live, "registry", "Enable-Sudo", "Enable-Sudo.ps1")), StringComparison.Ordinal);
+        Assert.Contains("'Enabled' 3", File.ReadAllText(Path.Combine(live, "registry", "Set-SystemPolicy.ps1")), StringComparison.Ordinal);
         Assert.DoesNotContain("GlobalUserDisabled", combined, StringComparison.Ordinal);
         Assert.DoesNotContain("SvcHostSplitThresholdInKB", combined, StringComparison.Ordinal);
         Assert.DoesNotContain("Set-Service", combined, StringComparison.Ordinal);
@@ -93,7 +81,7 @@ public class LivePostureScriptTests
     [Fact]
     public void OneDrive_script_purges_the_client_and_the_user_folder()
     {
-        string script = File.ReadAllText(FindRepoFile("post-install", "onedrive", "Uninstall-OneDrive.ps1"));
+        string script = File.ReadAllText(FindRepoFile("post-install", "Uninstall-OneDrive.ps1"));
         Assert.Contains("OneDriveSetup.exe", script, StringComparison.Ordinal);
         Assert.Contains("/uninstall", script, StringComparison.Ordinal);
         Assert.Contains("takeown.exe", script, StringComparison.Ordinal);
@@ -104,6 +92,8 @@ public class LivePostureScriptTests
         Assert.Contains("SyncRootManager", script, StringComparison.Ordinal);
         Assert.Contains("Move-OneDriveChildren", script, StringComparison.Ordinal);
         Assert.Contains("PreventNetworkTrafficPreUserSignIn", script, StringComparison.Ordinal);
+        Assert.Contains("DisableFileSyncNGSC", script, StringComparison.Ordinal);
+        Assert.Contains("%USERPROFILE%\\Desktop", script, StringComparison.Ordinal);
         Assert.DoesNotContain("left user folder", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-AppxPackage", script, StringComparison.Ordinal);
     }
@@ -111,7 +101,7 @@ public class LivePostureScriptTests
     [Fact]
     public void Registry_script_lists_the_product_inbox_strip()
     {
-        string script = File.ReadAllText(FindRepoFile("post-install", "inbox", "Remove-InboxApps.ps1"));
+        string script = File.ReadAllText(FindRepoFile("post-install", "Remove-InboxApps.ps1"));
         Assert.Contains("Deprovisioned", script, StringComparison.Ordinal);
         Assert.Contains("Clipchamp.Clipchamp_yxz26nhyzhsrt", script, StringComparison.Ordinal);
         Assert.Contains("UseWindowsPowerShell", script, StringComparison.Ordinal);
@@ -160,7 +150,7 @@ public class LivePostureScriptTests
         int drivers = orchestrator.LastIndexOf("Install-SurfaceDrivers.ps1", StringComparison.Ordinal);
         Assert.True(registry >= 0 && registry < oneDrive && oneDrive < inbox && inbox < drivers);
         Assert.Contains("[switch] $Drivers", orchestrator, StringComparison.Ordinal);
-        string driverScript = File.ReadAllText(Path.Combine(live, "drivers", "Install-SurfaceDrivers.ps1"));
+        string driverScript = File.ReadAllText(Path.Combine(live, "Install-SurfaceDrivers.ps1"));
         Assert.Contains("surface-laptop-7", driverScript, StringComparison.Ordinal);
         Assert.Contains("msiexec.exe", driverScript, StringComparison.Ordinal);
     }
