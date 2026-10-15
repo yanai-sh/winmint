@@ -37,6 +37,13 @@ $catalog = @{
     }
 }
 
+function Invoke-NativeContinue {
+    param([Parameter(Mandatory)][scriptblock] $Command)
+    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
+    $ErrorActionPreference = 'Continue'
+    & $Command | ForEach-Object { "$_" }
+}
+
 function Test-MicrosoftDownloadUri {
     param([string] $Uri)
     $parsed = $null
@@ -117,27 +124,27 @@ function Save-SurfaceMsi {
     }
 
     $job = 'WinMintSurface-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    & $bitsadmin /create /download $job 2>&1 | Out-Null
+    Invoke-NativeContinue { & $bitsadmin /create /download $job 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
-    & $bitsadmin /addfile $job $Uri $Destination 2>&1 | Out-Null
+    Invoke-NativeContinue { & $bitsadmin /addfile $job $Uri $Destination 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) { throw "BITS /addfile failed ($LASTEXITCODE): $Uri" }
-    & $bitsadmin /setpriority $job FOREGROUND 2>&1 | Out-Null
-    & $bitsadmin /resume $job 2>&1 | Out-Null
+    Invoke-NativeContinue { & $bitsadmin /setpriority $job FOREGROUND 2>&1 | Out-Null }
+    Invoke-NativeContinue { & $bitsadmin /resume $job 2>&1 | Out-Null }
     if ($LASTEXITCODE -ne 0) { throw "BITS /resume failed ($LASTEXITCODE): $Uri" }
 
     $wait = [Diagnostics.Stopwatch]::StartNew()
     while ($true) {
-        $lines = @(& $bitsadmin /rawreturn /getstate $job 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+        $lines = @(Invoke-NativeContinue { & $bitsadmin /rawreturn /getstate $job 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ } })
         if ($LASTEXITCODE -ne 0) { throw "BITS /getstate failed ($LASTEXITCODE)" }
         $state = if ($lines.Count) { [string]$lines[-1] } else { 'UNKNOWN' }
         if ($state -eq 'TRANSFERRED') { break }
         if ($state -in @('ERROR', 'CANCELLED', 'ACKNOWLEDGED')) { throw "BITS $state : $Uri" }
-        if ($state -eq 'SUSPENDED') { & $bitsadmin /resume $job 2>&1 | Out-Null }
+        if ($state -eq 'SUSPENDED') { Invoke-NativeContinue { & $bitsadmin /resume $job 2>&1 | Out-Null } }
         if ($wait.Elapsed.TotalMinutes -ge 45) { throw "BITS timed out after 45 minutes: $Uri" }
         Start-Sleep -Seconds 15
     }
 
-    & $bitsadmin /complete $job 2>&1 | Out-Null
+    Invoke-NativeContinue { & $bitsadmin /complete $job 2>&1 | Out-Null }
     if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
         throw "BITS completed but file missing: $Destination"
     }
