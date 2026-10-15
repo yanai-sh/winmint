@@ -38,20 +38,27 @@ function Stop-OneDriveProcess {
 }
 
 function Invoke-NativeContinue {
-    param([Parameter(Mandatory)][scriptblock] $Command)
+    param(
+        [Parameter(Mandatory)][string] $FilePath,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]] $ArgumentList
+    )
     # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
     $ErrorActionPreference = 'Continue'
-    & $Command | ForEach-Object { "$_" }
+    if ($null -eq $ArgumentList) {
+        $ArgumentList = @()
+    }
+
+    & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
 }
 
 function Invoke-RegQuiet {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]] $RegArgs)
-    Invoke-NativeContinue { & reg.exe @RegArgs 2>&1 | Out-Null }
+    Invoke-NativeContinue reg.exe @RegArgs | Out-Null
 }
 
 function Clear-OneDriveRunKey {
     param([Parameter(Mandatory)][string] $KeyPath)
-    $query = Invoke-NativeContinue { & reg.exe query $KeyPath 2>&1 }
+    $query = Invoke-NativeContinue reg.exe query $KeyPath
     if ($LASTEXITCODE -ne 0) {
         return
     }
@@ -78,8 +85,8 @@ function Remove-OneDriveTree {
 
     Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path) {
-        Invoke-NativeContinue { & takeown.exe /F $Path /A /R /D Y 2>&1 | Out-Null }
-        Invoke-NativeContinue { & icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C 2>&1 | Out-Null }
+        Invoke-NativeContinue takeown.exe /F $Path /A /R /D Y | Out-Null
+        Invoke-NativeContinue icacls.exe $Path /grant '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
         Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -188,8 +195,8 @@ function Remove-TrustedInstallerFile {
         return
     }
 
-    Invoke-NativeContinue { & takeown.exe /F $Path /A 2>&1 | Out-Null }
-    Invoke-NativeContinue { & icacls.exe $Path /grant '*S-1-5-32-544:F' 2>&1 | Out-Null }
+    Invoke-NativeContinue takeown.exe /F $Path /A | Out-Null
+    Invoke-NativeContinue icacls.exe $Path /grant '*S-1-5-32-544:F' | Out-Null
     Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         Write-Output "OneDrive setup still present: $Path"
@@ -345,7 +352,7 @@ function Invoke-OneDrivePurge {
 
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if ($winget) {
-        $wingetOut = Invoke-NativeContinue { & $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity 2>&1 }
+        $wingetOut = Invoke-NativeContinue $winget.Source uninstall --id Microsoft.OneDrive --exact --accept-source-agreements --disable-interactivity
         if ($LASTEXITCODE -eq 0) {
             Write-Output 'winget: Microsoft.OneDrive uninstalled'
         }

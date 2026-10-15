@@ -31,14 +31,21 @@ else {
 }
 
 function Invoke-NativeContinue {
-    param([Parameter(Mandatory)][scriptblock] $Command)
+    param(
+        [Parameter(Mandatory)][string] $FilePath,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]] $ArgumentList
+    )
     # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
     $ErrorActionPreference = 'Continue'
-    & $Command | ForEach-Object { "$_" }
+    if ($null -eq $ArgumentList) {
+        $ArgumentList = @()
+    }
+
+    & $FilePath @ArgumentList 2>&1 | ForEach-Object { "$_" }
 }
 
 function Get-ProvisionedInboxApps {
-    $output = Invoke-NativeContinue { & dism.exe /Online /Get-ProvisionedAppxPackages /English 2>&1 }
+    $output = Invoke-NativeContinue dism.exe /Online /Get-ProvisionedAppxPackages /English
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "dism.exe could not list provisioned apps ($LASTEXITCODE)."
         return @()
@@ -70,7 +77,7 @@ function Get-ProvisionedInboxApps {
 
 function Remove-ProvisionedInboxApp {
     param([Parameter(Mandatory)][string] $PackageName)
-    Invoke-NativeContinue { & dism.exe /Online /Remove-ProvisionedAppxPackage "/PackageName:$PackageName" /Quiet /English 2>&1 | Out-Null }
+    Invoke-NativeContinue dism.exe /Online /Remove-ProvisionedAppxPackage "/PackageName:$PackageName" /Quiet /English | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Output "dism.exe could not remove provisioned $PackageName ($LASTEXITCODE)."
     }
