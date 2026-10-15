@@ -1,5 +1,7 @@
 # Security policy
 
+This repository is the maintainer's working tree. It is not ready for anyone else to run. The current Output ISO is unstable. Do not write it to USB, boot it, or install from it. The current operator path is `post-install/` on an already-installed PC.
+
 ## Supported releases
 
 WinMint is Alpha. Security reports apply to the latest GitHub Release of [yanai-sh/winmint](https://github.com/yanai-sh/winmint) and to `main`. Older tags are not patched.

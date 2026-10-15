@@ -4,6 +4,7 @@
 .SYNOPSIS
   Purge OneDrive from this PC, including the OneDrive folder.
 .DESCRIPTION
+  Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Files that were stored inside an OneDrive folder are moved into the normal
   profile folders first. The OneDrive directory is then deleted.

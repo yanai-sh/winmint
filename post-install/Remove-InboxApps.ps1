@@ -4,6 +4,7 @@
 .SYNOPSIS
   Remove the WinMint inbox app strip and stamp Deprovisioned marks.
 .DESCRIPTION
+  Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Under PowerShell 7, AppX cmdlets load through the Windows PowerShell compatibility session.
   -DryRun reports each app and removes nothing.

@@ -7,8 +7,8 @@ namespace WinMint.Tests;
 public class WizardBuildTests
 {
     [Theory]
-    [InlineData(ImageQualityLane.Test, "Test lane (not the wipe gate).")]
-    [InlineData(ImageQualityLane.Release, "Gate B wipe media")]
+    [InlineData(ImageQualityLane.Test, "Output ISO is unstable. Do not install from it.")]
+    [InlineData(ImageQualityLane.Release, "Output ISO is unstable. Do not install from it.")]
     public async Task Apply_uses_the_approved_composition(
         ImageQualityLane lane,
         string expectedHint)

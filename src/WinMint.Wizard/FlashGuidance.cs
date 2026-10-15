@@ -5,7 +5,7 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard;
 
-/// <summary>Post-Build flash strip copy (Avalonia-free). Gate B = wipe media prep, not Primary install proven.</summary>
+/// <summary>Post-build copy. The current Output ISO is unstable install media (ADR-018).</summary>
 internal static class FlashGuidance
 {
     public static string Format(
@@ -36,35 +36,19 @@ internal static class FlashGuidance
         string? sha = string.IsNullOrWhiteSpace(outputIsoSha256) ? null : outputIsoSha256.Trim();
 
         StringBuilder sb = new();
-        if (gateB)
-        {
-            sb.AppendLine("Gate B wipe media ready (pre-wipe ISO evidence — not a completed Primary install).");
-        }
-        else if (lane == ImageQualityLane.Release && packageStrict)
-        {
-            sb.AppendLine("Release+strict ISO ready — package wire not wipe-ready (not Gate B).");
-        }
-        else if (lane == ImageQualityLane.Release)
-        {
-            sb.AppendLine("Release ISO ready (not package-strict wipe gate).");
-        }
-        else
-        {
-            sb.AppendLine("Test ISO ready (not the wipe gate).");
-        }
-
+        sb.AppendLine("Unstable. Do not write this ISO to USB. Do not boot it. Do not install from it.");
+        sb.AppendLine("Live posture: post-install/Apply-LivePosture.ps1");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Build: lane={lane}; packageStrict={packageStrict}; gateB={gateB}.");
         sb.AppendLine(CultureInfo.InvariantCulture, $"ISO: {iso}");
-        sb.AppendLine("Flash with Rufus in DD Image mode (not ISO mode).");
         if (!string.IsNullOrWhiteSpace(sha))
         {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"SHA-256 (digests.outputIso.sha256): {sha}");
+            sb.Append(CultureInfo.InvariantCulture, $"SHA-256 (digests.outputIso.sha256): {sha}");
         }
         else
         {
-            sb.AppendLine("Check digests.outputIso.sha256 on ImageEvidence / evidence.json.");
+            sb.Append("Check digests.outputIso.sha256 on ImageEvidence / evidence.json.");
         }
 
-        sb.Append("Boot expects WinPE LaunchApply, not Setup.");
         return sb.ToString();
     }
 }

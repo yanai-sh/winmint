@@ -1,6 +1,8 @@
 # WinMint — Agent contract
 
-Windows 11 ISO builder (**alpha**). **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **Provisioning Supervisor**; packages may delegate to platform tools.
+Maintainer working tree (**alpha**). Not ready for anyone else to run. Current operator path: **Live posture** in `post-install/` (Windows PowerShell 5.1 and pwsh 7). The Output ISO is unstable and must not be used to install. A portable ISO that installs cleanly remains the goal ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)).
+
+**ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **Provisioning Supervisor**; packages may delegate to platform tools.
 
 ## Core rule
 
@@ -23,12 +25,13 @@ Open by branch:
 | Domain-doc habit for engineering skills | [docs/agents/domain.md](docs/agents/domain.md) |
 | Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Identity bars (detail is ADRs + code): Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)).
+Identity bars (detail is ADRs + code): maintainer-only until usable, current Output ISO is unstable install media, Live posture is the operator path ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)) · Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)).
 
 ## Map
 
 | Concern | Lives in |
 |---------|----------|
+| **Live posture** (current operator path) | `post-install/` |
 | **BuildPlan** / plan artifacts | `src/WinMint.Orchestrator` |
 | **HostCompile** (entry; not a fourth module) | `src/WinMint.Orchestrator` |
 | **ImageServicing** | `src/WinMint.Orchestrator` + `servicing/` |

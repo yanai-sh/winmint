@@ -4,6 +4,7 @@
 .SYNOPSIS
   Install the Surface catalog driver MSI on this PC.
 .DESCRIPTION
+  Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
   Optional. The image build injects a classified INF subset offline. This script
   runs Microsoft's Surface driver MSI on the live PC.

@@ -4,6 +4,7 @@
 .SYNOPSIS
   Run the live posture scripts in order.
 .DESCRIPTION
+  Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated from this directory, after Windows Update.
   Each script also runs on its own.
   -DryRun prints the changes and writes nothing.
