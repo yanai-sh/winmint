@@ -82,6 +82,18 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch 'reg add HKCU\\Console /v QuickEdit /t REG_DWORD /d 0 /f') {
             $defects += 'LaunchApply.cmd must disable console Quick Edit (Hyper-V click pauses DISM)'
         }
+        # A second USB boot used to reach `clean` again. The marker has to be tested first.
+        $appliedAt = $body.IndexOf('winmint-applied.txt')
+        $cleanAt = $body.IndexOf('echo clean')
+        if ($appliedAt -lt 0 -or $cleanAt -lt 0 -or $appliedAt -ge $cleanAt) {
+            $defects += 'LaunchApply.cmd must notice winmint-applied.txt before diskpart clean'
+        }
+        if ($body -notmatch 'wpeutil shutdown') {
+            $defects += 'LaunchApply.cmd must shut down instead of erasing when WinMint is already installed'
+        }
+        if ($body -notmatch '/offline /bootex') {
+            $defects += 'LaunchApply.cmd must bcdboot /offline /bootex (2023 UEFI CA boot manager)'
+        }
     }
 
     if (-not (Test-Path -LiteralPath $winpeshl)) {

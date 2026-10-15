@@ -28,6 +28,13 @@ if not defined INSTALL (
   exit /b 1
 )
 echo WinMint: found install.wim on drive %INSTALL%:
+rem A second boot of this USB must not clean the disk. A finished install turns the PC off.
+if exist "%INSTALL%:\winmint-reinstall.txt" (
+  del /f /q "%INSTALL%:\winmint-reinstall.txt"
+  set REINSTALL=1
+  echo WinMint: reinstall requested. The internal disk will be erased.
+)
+if not defined REINSTALL if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
 set WORK=%TEMP%\winmint
 if not exist "%WORK%" mkdir "%WORK%"
 set LIST=%WORK%\disks.txt
@@ -68,6 +75,12 @@ if defined EXTRA (
   echo Put a unique model substring in %INSTALL%:\winmint-target-disk.txt and reboot.
   exit /b 1
 )
+if not defined REINSTALL call :winmint_see_applied
+if defined HANDED goto :winmint_finished
+if defined PROBEFAIL (
+  echo WinMint: could not check the internal disk for an existing install. Refusing to erase.
+  exit /b 1
+)
 echo WinMint: erasing disk %TARGET%
 set DP=%WORK%\diskpart.txt
 > "%DP%" (
@@ -98,9 +111,14 @@ if errorlevel 1 (
   exit /b 1
 )
 echo WinMint: writing UEFI boot files to S:\...
-bcdboot W:\Windows /s S: /f UEFI
+rem The applied image's bcdboot knows /offline /bootex. WinPE's copy may not.
+rem /s still targets the internal EFI partition. /offline /bootex selects the
+rem Windows UEFI CA 2023 boot manager. Surface rejects the 2011 manager.
+set BCDBOOT=W:\Windows\System32\bcdboot.exe
+if not exist "%BCDBOOT%" set BCDBOOT=bcdboot
+"%BCDBOOT%" W:\Windows /s S: /f UEFI /offline /bootex
 if errorlevel 1 (
-  echo WinMint: bcdboot failed
+  echo WinMint: bcdboot /offline /bootex failed. The 2011 UEFI CA boot manager is not a fallback.
   exit /b 1
 )
 if exist "%INSTALL%:\OobeUnattend.xml" (
@@ -117,9 +135,54 @@ reg add HKLM\WinMintApply\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f
 reg unload HKLM\WinMintApply
+echo WinMint apply complete> "%INSTALL%:\winmint-applied.txt"
+echo WinMint apply complete> "W:\Windows\WinMint.applied"
 echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
 exit /b 0
+
+:winmint_finished
+echo WinMint: already installed. Unplug the USB, then turn the laptop on.
+echo WinMint: the internal disk was not changed.
+wpeutil shutdown
+exit /b 0
+
+:winmint_see_applied
+set HANDED=
+set PROBEFAIL=
+> "%WORK%\parts.txt" (
+  echo select disk %TARGET%
+  echo list partition
+  echo exit
+)
+diskpart /s "%WORK%\parts.txt" > "%WORK%\partsout.txt"
+for /f "usebackq tokens=1,2" %%a in ("%WORK%\partsout.txt") do if /i "%%a"=="Partition" if not "%%b"=="###" call :winmint_probe %%b
+goto :eof
+
+:winmint_probe
+set N=%1
+if defined HANDED goto :eof
+if exist B:\ (
+  set PROBEFAIL=1
+  goto :eof
+)
+> "%WORK%\as%N%.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo assign letter=B
+  echo exit
+)
+diskpart /s "%WORK%\as%N%.txt" >nul
+if not exist B:\ goto :eof
+if exist B:\Windows\WinMint.applied set HANDED=1
+> "%WORK%\rm%N%.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo remove letter=B
+  echo exit
+)
+diskpart /s "%WORK%\rm%N%.txt" >nul
+goto :eof
 
 rem Keeps a fixed disk as a candidate. USB is excluded categorically, so the installer can never
 rem erase the media it booted from, and disk numbers stay discovered rather than configured.
