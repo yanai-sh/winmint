@@ -245,20 +245,14 @@ public class DebloatPresetTests
             DebloatPresets.TryExpand(DebloatPresets.Recommended);
         Assert.True(expanded.IsOk);
 
-        string root = TestRepo.Root;
-        string scratch = Path.Combine(root, ".scratch");
-        Directory.CreateDirectory(scratch);
-        string pwFile = Path.Combine(scratch, "sl7.password");
-        File.WriteAllText(pwFile, AccountProfile.DefaultLocalPassword);
-
-        string samplePath = Path.Combine(root, "samples", "sl7.profile.json");
+        string samplePath = Path.Combine(TestRepo.Root, "samples", "sl7.profile.json");
         byte[] utf8 = File.ReadAllBytes(samplePath);
         string json = Encoding.UTF8.GetString(utf8);
         Assert.DoesNotContain("\"preset\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("\"password\"", json, StringComparison.Ordinal);
         Assert.Contains("../.scratch/sl7.password", json, StringComparison.Ordinal);
 
-        Result<Profile, IReadOnlyList<DocumentError>> parsed = ProfileFile.TryLoad(samplePath);
+        Result<Profile, IReadOnlyList<DocumentError>> parsed = Sl7SamplePassword.TryLoad();
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Code)));
         Assert.Equal("Yanai", parsed.Value.Account.Username);
         Assert.Equal(AccountProfile.DefaultLocalPassword, parsed.Value.Account.Password);
