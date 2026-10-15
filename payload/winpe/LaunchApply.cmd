@@ -107,10 +107,19 @@ if errorlevel 1 (
   exit /b 1
 )
 echo WinMint: writing UEFI boot files to S:\...
-bcdboot W:\Windows /s S: /f UEFI
+rem The applied image's bcdboot knows /offline /bootex. WinPE's copy may not.
+rem /s still targets the internal EFI partition. /offline /bootex selects the
+rem Windows UEFI CA 2023 boot manager. Surface rejects the 2011 manager.
+set BCDBOOT=W:\Windows\System32\bcdboot.exe
+if not exist "%BCDBOOT%" set BCDBOOT=bcdboot
+"%BCDBOOT%" W:\Windows /s S: /f UEFI /offline /bootex
 if errorlevel 1 (
-  echo WinMint: bcdboot failed
-  exit /b 1
+  echo WinMint: bcdboot /offline /bootex failed. Retrying with the default boot files.
+  "%BCDBOOT%" W:\Windows /s S: /f UEFI
+  if errorlevel 1 (
+    echo WinMint: bcdboot failed
+    exit /b 1
+  )
 )
 if exist "%INSTALL%:\OobeUnattend.xml" (
   if not exist W:\Windows\Panther mkdir W:\Windows\Panther

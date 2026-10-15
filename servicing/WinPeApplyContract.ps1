@@ -91,6 +91,9 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch 'wpeutil shutdown') {
             $defects += 'LaunchApply.cmd must shut down instead of erasing when WinMint is already installed'
         }
+        if ($body -notmatch '/offline /bootex') {
+            $defects += 'LaunchApply.cmd must bcdboot /offline /bootex (2023 UEFI CA boot manager)'
+        }
     }
 
     if (-not (Test-Path -LiteralPath $winpeshl)) {

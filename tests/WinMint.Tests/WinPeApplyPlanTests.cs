@@ -102,6 +102,7 @@ public class WinPeApplyPlanTests
 
         Assert.Contains("Apply-Image", payload, StringComparison.Ordinal);
         Assert.Contains("bcdboot", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/offline /bootex", payload, StringComparison.Ordinal);
         Assert.Contains("wpeutil reboot", payload, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("wpeutil shutdown", payload, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("winmint-applied.txt", payload, StringComparison.Ordinal);
