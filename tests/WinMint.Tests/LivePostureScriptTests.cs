@@ -31,6 +31,8 @@ public class LivePostureScriptTests
             string path = Path.Combine(live, "registry", task);
             string body = File.ReadAllText(path);
             Assert.Contains("function Set-RegDword", body, StringComparison.Ordinal);
+            Assert.Contains("System32\\reg.exe", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("New-ItemProperty", body, StringComparison.Ordinal);
             Assert.DoesNotContain("Registry.ps1", body, StringComparison.Ordinal);
             script.AppendLine(body);
         }
@@ -95,6 +97,12 @@ public class LivePostureScriptTests
         Assert.Contains("PreventNetworkTrafficPreUserSignIn", script, StringComparison.Ordinal);
         Assert.Contains("DisableFileSyncNGSC", script, StringComparison.Ordinal);
         Assert.Contains("%USERPROFILE%\\Desktop", script, StringComparison.Ordinal);
+        Assert.Contains("-1978335212", script, StringComparison.Ordinal);
+        Assert.Contains("$root.Name -ne 'OneDriveTemp'", script, StringComparison.Ordinal);
+        Assert.Contains(@"^\.[0-9A-Fa-f]{8}-", script, StringComparison.Ordinal);
+        Assert.Contains("2>&1", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Generic.List", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PSScriptRoot", script, StringComparison.Ordinal);
         Assert.DoesNotContain("left user folder", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-AppxPackage", script, StringComparison.Ordinal);
     }
@@ -134,7 +142,13 @@ public class LivePostureScriptTests
             Assert.DoesNotContain("#requires -Version 7", script, StringComparison.Ordinal);
             Assert.DoesNotContain("&&", script, StringComparison.Ordinal);
             Assert.DoesNotContain("??", script, StringComparison.Ordinal);
+            Assert.DoesNotContain(". (Join-Path", script, StringComparison.Ordinal);
             Assert.Contains("[switch] $DryRun", script, StringComparison.Ordinal);
+            string name = Path.GetFileName(path);
+            if (name is not "Apply-LivePosture.ps1" and not "Apply-Registry.ps1")
+            {
+                Assert.DoesNotContain("PSScriptRoot", script, StringComparison.Ordinal);
+            }
         }
 
         string orchestrator = File.ReadAllText(Path.Combine(live, "Apply-LivePosture.ps1"));
@@ -144,9 +158,15 @@ public class LivePostureScriptTests
         int drivers = orchestrator.LastIndexOf("Install-SurfaceDrivers.ps1", StringComparison.Ordinal);
         Assert.True(registry >= 0 && registry < oneDrive && oneDrive < inbox && inbox < drivers);
         Assert.Contains("[switch] $Drivers", orchestrator, StringComparison.Ordinal);
+        Assert.Contains("Missing $Name next to this script.", orchestrator, StringComparison.Ordinal);
+        string registryOrchestrator = File.ReadAllText(Path.Combine(live, "Apply-Registry.ps1"));
+        Assert.Contains("Missing $Name next to this script.", registryOrchestrator, StringComparison.Ordinal);
+        Assert.DoesNotContain("Registry.ps1", registryOrchestrator, StringComparison.Ordinal);
         string driverScript = File.ReadAllText(Path.Combine(live, "Install-SurfaceDrivers.ps1"));
         Assert.Contains("surface-laptop-7", driverScript, StringComparison.Ordinal);
         Assert.Contains("msiexec.exe", driverScript, StringComparison.Ordinal);
+        Assert.Contains("1638", driverScript, StringComparison.Ordinal);
+        Assert.Contains("1641", driverScript, StringComparison.Ordinal);
     }
 
     private static HashSet<string> QuotedBlock(string script, string marker)

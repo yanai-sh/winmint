@@ -6,9 +6,11 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
+  This file stands alone. The working directory does not matter.
   Under PowerShell 7, AppX cmdlets load through the Windows PowerShell compatibility session.
   Provisioned packages are listed and removed with dism.exe. The DISM PowerShell cmdlet
   fails there with "Class not registered".
+  A second run reports apps that are already gone and refreshes the Deprovisioned marks.
   -DryRun reports each app and removes nothing.
 #>
 param([switch] $DryRun)
@@ -29,7 +31,7 @@ else {
 }
 
 function Get-ProvisionedInboxApps {
-    $output = & dism.exe /Online /Get-ProvisionedAppxPackages /English
+    $output = & dism.exe /Online /Get-ProvisionedAppxPackages /English 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "dism.exe could not list provisioned apps ($LASTEXITCODE)."
         return @()
@@ -61,7 +63,7 @@ function Get-ProvisionedInboxApps {
 
 function Remove-ProvisionedInboxApp {
     param([Parameter(Mandatory)][string] $PackageName)
-    & dism.exe /Online /Remove-ProvisionedAppxPackage "/PackageName:$PackageName" /Quiet /English | Out-Null
+    & dism.exe /Online /Remove-ProvisionedAppxPackage "/PackageName:$PackageName" /Quiet /English 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Output "dism.exe could not remove provisioned $PackageName ($LASTEXITCODE)."
     }

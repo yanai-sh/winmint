@@ -6,8 +6,11 @@
 .DESCRIPTION
   Maintainer working tree. Not ready for anyone else to run.
   Windows PowerShell 5.1 and PowerShell 7. Run elevated.
+  This file stands alone. The working directory does not matter.
   Optional. The image build injects a classified INF subset offline. This script
   runs Microsoft's Surface driver MSI on the live PC.
+  A second run reuses a signed MSI already on disk. An MSI version that is already
+  installed is left in place.
   -DryRun resolves the MSI name and does not download or install.
 
   pwsh -NoProfile -File .\Install-SurfaceDrivers.ps1 -DryRun
@@ -114,12 +117,12 @@ function Save-SurfaceMsi {
     }
 
     $job = 'WinMintSurface-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    & $bitsadmin /create /download $job | Out-Null
+    & $bitsadmin /create /download $job 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "BITS /create failed ($LASTEXITCODE)" }
-    & $bitsadmin /addfile $job $Uri $Destination | Out-Null
+    & $bitsadmin /addfile $job $Uri $Destination 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "BITS /addfile failed ($LASTEXITCODE): $Uri" }
-    & $bitsadmin /setpriority $job FOREGROUND | Out-Null
-    & $bitsadmin /resume $job | Out-Null
+    & $bitsadmin /setpriority $job FOREGROUND 2>&1 | Out-Null
+    & $bitsadmin /resume $job 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "BITS /resume failed ($LASTEXITCODE): $Uri" }
 
     $wait = [Diagnostics.Stopwatch]::StartNew()
@@ -129,12 +132,12 @@ function Save-SurfaceMsi {
         $state = if ($lines.Count) { [string]$lines[-1] } else { 'UNKNOWN' }
         if ($state -eq 'TRANSFERRED') { break }
         if ($state -in @('ERROR', 'CANCELLED', 'ACKNOWLEDGED')) { throw "BITS $state : $Uri" }
-        if ($state -eq 'SUSPENDED') { & $bitsadmin /resume $job | Out-Null }
+        if ($state -eq 'SUSPENDED') { & $bitsadmin /resume $job 2>&1 | Out-Null }
         if ($wait.Elapsed.TotalMinutes -ge 45) { throw "BITS timed out after 45 minutes: $Uri" }
         Start-Sleep -Seconds 15
     }
 
-    & $bitsadmin /complete $job | Out-Null
+    & $bitsadmin /complete $job 2>&1 | Out-Null
     if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
         throw "BITS completed but file missing: $Destination"
     }
@@ -202,12 +205,15 @@ if (-not (Test-MicrosoftSignedMsi -Path $destination)) {
 }
 
 $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', $destination, '/qn', '/norestart') -Wait -PassThru
-if ($proc.ExitCode -eq 3010) {
+if ($proc.ExitCode -eq 0) {
+    Write-Output 'Surface drivers installed.'
+}
+elseif ($proc.ExitCode -eq 3010 -or $proc.ExitCode -eq 1641) {
     Write-Output 'Surface drivers installed. Reboot to finish.'
 }
-elseif ($proc.ExitCode -ne 0) {
-    throw "msiexec failed (exit $($proc.ExitCode)): $destination"
+elseif ($proc.ExitCode -eq 1638) {
+    Write-Output 'Surface drivers already installed. Left the existing version in place.'
 }
 else {
-    Write-Output 'Surface drivers installed.'
+    throw "msiexec failed (exit $($proc.ExitCode)): $destination"
 }
