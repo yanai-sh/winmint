@@ -42,7 +42,7 @@ public class LivePostureScriptTests
     }
 
     [Fact]
-    public void OneDrive_script_purges_the_client_and_leaves_the_user_folder()
+    public void OneDrive_script_purges_the_client_and_the_user_folder()
     {
         string script = File.ReadAllText(FindRepoFile("post-install", "Uninstall-OneDrive.ps1"));
         Assert.Contains("OneDriveSetup.exe", script, StringComparison.Ordinal);
@@ -50,7 +50,12 @@ public class LivePostureScriptTests
         Assert.Contains("takeown.exe", script, StringComparison.Ordinal);
         Assert.Contains("RunOnce", script, StringComparison.Ordinal);
         Assert.Contains("Microsoft.OneDrive", script, StringComparison.Ordinal);
-        Assert.Contains("left user folder", script, StringComparison.Ordinal);
+        Assert.Contains("OneDriveTemp", script, StringComparison.Ordinal);
+        Assert.Contains("OneSyncSvc", script, StringComparison.Ordinal);
+        Assert.Contains("SyncRootManager", script, StringComparison.Ordinal);
+        Assert.Contains("Move-OneDriveChildren", script, StringComparison.Ordinal);
+        Assert.Contains("PreventNetworkTrafficPreUserSignIn", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("left user folder", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-AppxPackage", script, StringComparison.Ordinal);
     }
 
