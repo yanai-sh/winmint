@@ -35,7 +35,7 @@ function Get-ProvisionedInboxApps {
         return @()
     }
 
-    $apps = New-Object System.Collections.Generic.List[object]
+    $apps = @()
     $display = ''
     foreach ($line in @($output)) {
         if ($line -match '^\s*Display Name\s*:\s*(.*)$') {
@@ -46,17 +46,17 @@ function Get-ProvisionedInboxApps {
         if ($line -match '^\s*Package Name\s*:\s*(.*)$') {
             $packageName = $Matches[1].Trim()
             if (-not [string]::IsNullOrEmpty($packageName)) {
-                $apps.Add([pscustomobject]@{
-                        DisplayName = $display
-                        PackageName = $packageName
-                    })
+                $apps += [pscustomobject]@{
+                    DisplayName = $display
+                    PackageName = $packageName
+                }
             }
 
             $display = ''
         }
     }
 
-    return @($apps)
+    return $apps
 }
 
 function Remove-ProvisionedInboxApp {
@@ -96,7 +96,7 @@ function Remove-InboxApp {
         [Parameter(Mandatory)] $Installed,
         [Parameter(Mandatory)] $Provisioned
     )
-    $pfns = New-Object System.Collections.Generic.List[string]
+    $pfns = @()
     $touched = $false
     foreach ($pkg in @($Installed)) {
         $name = [string] $pkg.Name
@@ -120,7 +120,7 @@ function Remove-InboxApp {
         }
 
         if ($pkg.PackageFamilyName) {
-            $pfns.Add([string] $pkg.PackageFamilyName)
+            $pfns += [string] $pkg.PackageFamilyName
         }
     }
 
@@ -140,12 +140,12 @@ function Remove-InboxApp {
         Remove-ProvisionedInboxApp -PackageName $packageName
         $parts = $packageName -split '_'
         if ($parts.Count -ge 2 -and $display) {
-            $pfns.Add(('{0}_{1}' -f $display, $parts[-1]))
+            $pfns += ('{0}_{1}' -f $display, $parts[-1])
         }
     }
 
     if ($pfns.Count -eq 0) {
-        $pfns.Add((Get-FallbackFamilyName -Id $Id))
+        $pfns += (Get-FallbackFamilyName -Id $Id)
     }
 
     $root = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'

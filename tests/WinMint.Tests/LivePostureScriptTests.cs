@@ -118,6 +118,7 @@ public class LivePostureScriptTests
         Assert.Contains("/Remove-ProvisionedAppxPackage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Get-AppxProvisionedPackage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-AppxProvisionedPackage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Generic.List", script, StringComparison.Ordinal);
         HashSet<string> listed = QuotedBlock(script, "$inboxIds = @(");
         HashSet<string> expected = ProductPosture.AppxIds
             .Where(id => !ProductPosture.PreserveAppxSet.Contains(id))
