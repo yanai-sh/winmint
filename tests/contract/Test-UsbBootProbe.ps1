@@ -60,6 +60,16 @@ $static = Read-RepoText 'tools/usb/Test-UsbMediaArtifact.ps1'
 foreach ($required in @('wimlib', 'Get-AuthenticodeSignature', 'Windows UEFI CA 2023', 'bcdedit.exe')) {
     if ($static -notmatch [regex]::Escape($required)) { throw "USB static verifier is missing: $required" }
 }
+foreach ($source in @($static, $image)) {
+    $resolveAt = $source.IndexOf('Resolve-Path -LiteralPath $WorkDirectory', [StringComparison]::Ordinal)
+    $dotAt = $source.IndexOf('Write-UsbMedia.ps1', [StringComparison]::Ordinal)
+    if ($resolveAt -lt 0 -or $dotAt -lt 0 -or $resolveAt -gt $dotAt) {
+        throw 'USB tools must resolve WorkDirectory before dot-sourcing Write-UsbMedia.ps1'
+    }
+    if ($source -match "Write-UsbMedia\.ps1'\) -WorkDirectory unused") {
+        throw 'USB tools must not let Write-UsbMedia.ps1 overwrite WorkDirectory with unused'
+    }
+}
 
 Write-Output 'Test-UsbBootProbe ok'
 exit 0

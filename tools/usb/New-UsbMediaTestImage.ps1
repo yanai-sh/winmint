@@ -19,9 +19,11 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory unused -DiskNumber 0
-
+# Dot-sourcing binds its parameters in this scope. Resolve first and pass that
+# path through; -WorkDirectory unused would replace the caller's WorkDirectory.
 $work = (Resolve-Path -LiteralPath $WorkDirectory).Path
+. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
+
 $image = [IO.Path]::GetFullPath($ImagePath)
 if ([IO.Path]::GetExtension($image) -cne '.vhdx') {
     throw 'ImagePath must use the .vhdx extension'

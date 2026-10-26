@@ -11,9 +11,11 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) { throw 'USB media artifact validation requires Windows' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory unused -DiskNumber 0
-
+# Dot-sourcing binds its parameters in this scope. Resolve first and pass that
+# path through; -WorkDirectory unused would replace the caller's WorkDirectory.
 $work = (Resolve-Path -LiteralPath $WorkDirectory).Path
+. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
+
 $receipt = Read-WinMintUsbReceipt -WorkDirectory $work
 $mediaDir = Join-Path $work 'media'
 Assert-WinMintUsbReceiptSource -MediaDir $mediaDir -Receipt $receipt
