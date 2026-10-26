@@ -1,6 +1,6 @@
 # WinMint — Agent contract
 
-Maintainer working tree (**alpha**). Not ready for anyone else to run. Current operator path: **Live posture** in `post-install/` (Windows PowerShell 5.1 and pwsh 7). The Output ISO is unstable and must not be used to install. A portable ISO that installs cleanly remains the goal ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)).
+Maintainer working tree (**alpha**). Not ready for anyone else to run. Current operator path: **Live posture** in `post-install/` (Windows PowerShell 5.1 and pwsh 7). The Output ISO is unstable and must not be used to install. Product-owned USB media that installs cleanly is the metal goal ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md), [ADR-019](docs/decisions/ADR-019-product-owned-usb-media.md)).
 
 **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **Provisioning Supervisor**; packages may delegate to platform tools.
 

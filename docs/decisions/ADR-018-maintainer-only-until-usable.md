@@ -1,7 +1,7 @@
-# ADR-018: Maintainer-only until a portable ISO is usable
+# ADR-018: Maintainer-only until portable install media is usable
 
 **Status:** Accepted · **Date:** 2026-10-15  
-**Clarifies:** [ADR-012](ADR-012-flash-outside-product-seam.md) (Flash stays outside the product; the current Output ISO is not install media)
+**Clarifies:** [ADR-019](ADR-019-product-owned-usb-media.md) (the current Output ISO is not install media)
 
 ### Context
 
@@ -19,8 +19,8 @@ The current operator path is **Live posture**: `post-install/` on an already-ins
 
 The current **Output ISO** is unstable. Do not write it to USB. Do not boot it. Do not install from it. Wizard review, Cli, Host Apply, the primary-gate wizard, and the bootstrap say that. Gate B remains host evidence. A green Gate B does not make this ISO install media.
 
-The goal remains a portable ISO that installs cleanly, with curated settings still to come. The compiler stays in the tree for that goal. [ADR-012](ADR-012-flash-outside-product-seam.md) still keeps Flash outside the product seam when that ISO exists.
+The goal remains portable install media that installs cleanly, with curated settings still to come. The ISO compiler stays for Hyper-V/DVD acceptance. [ADR-019](ADR-019-product-owned-usb-media.md) makes product-owned USB media the future metal install artifact.
 
 ### Review trigger
 
-The maintainer is confident a portable ISO installs cleanly and is ready for someone else to run.
+Product-owned USB media passes real Secure Boot install proof and the maintainer is confident it is ready for someone else to run.
