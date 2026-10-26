@@ -28,6 +28,10 @@ WinMint also owns one elevated write-and-verify path. It accepts an explicit rem
 
 Reproducibility means the same source identity, Profile, BuildPlan, and serviced payload produce the same versioned content manifest. Filesystem metadata, partition GUIDs, and volume serials are not required to be byte-identical.
 
+Acceptance is layered around one receipt-bound media layout. Offline validation verifies WIM integrity, the EFI signatures and BCD. QEMU/AAVMF boots that layout as ARM64 USB mass storage under Secure Boot, rather than as a DVD or VirtIO disk. A raw form of the same test image may be exposed by PiKVM as a flash drive for a non-destructive boot probe on the supported machine. The probe branches before target-disk discovery and emits visible evidence before shutdown.
+
+Virtual firmware is regression coverage, not metal acceptance. A QEMU or Hyper-V pass cannot replace the PiKVM or physical-USB probe on supported firmware, and the non-destructive probe cannot replace the eventual controlled full install.
+
 The Output ISO remains for Hyper-V/DVD acceptance and is not the metal install artifact. Commodity flashers are outside the supported path. The current maintainer-only and unstable-media posture remains until the product-owned USB passes real Secure Boot install proof.
 
 ### Review trigger

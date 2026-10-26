@@ -81,6 +81,7 @@ function ConvertTo-WinMintUsbMediaReceipt {
 
     $required = @(
         'efi/boot/bootaa64.efi',
+        'efi/microsoft/boot/bootmgfw.efi',
         'efi/microsoft/boot/boot.stl',
         'sources/boot.wim',
         'sources/install.wim',

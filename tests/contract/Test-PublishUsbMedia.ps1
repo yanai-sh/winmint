@@ -26,6 +26,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Join-Path $media $dir) | Out-Null
     }
     Set-Content -LiteralPath (Join-Path $media 'efi\boot\bootaa64.efi') -Value 'arm64' -Encoding utf8 -NoNewline
+    Set-Content -LiteralPath (Join-Path $media 'efi\microsoft\boot\bootmgfw.efi') -Value 'mgfw' -Encoding utf8 -NoNewline
     Set-Content -LiteralPath (Join-Path $media 'efi\microsoft\boot\boot.stl') -Value 'stl' -Encoding utf8 -NoNewline
     Set-Content -LiteralPath (Join-Path $media 'boot\bcd') -Value 'bcd' -Encoding utf8 -NoNewline
     Set-Content -LiteralPath (Join-Path $media 'sources\boot.wim') -Value 'boot-wim' -Encoding utf8 -NoNewline

@@ -77,6 +77,20 @@ just smoke-maintainer-monitor
 # Extra Watch attach: just watch-smoke .scratch/smoke
 ```
 
+USB acceptance remains maintainer-only. After a successful Apply work directory exists, validate its
+receipt-bound media, build one probe image, then exercise distinct firmware boundaries:
+
+```powershell
+just usb-static-verify .scratch/sl7-build C:\tools\wimlib-imagex.exe
+just usb-test-image .scratch/sl7-build .scratch\usb-probe.vhdx .scratch\usb-probe.img C:\tools\qemu-img.exe
+just usb-qemu-probe .scratch\usb-probe.vhdx C:\firmware\AAVMF_CODE.ms.fd C:\firmware\AAVMF_VARS.ms.fd C:\tools\qemu-system-aarch64.exe
+just usb-pikvm-probe https://pikvm.example .scratch\usb-probe.img .scratch\usb-probe.vhdx.json
+```
+
+The QEMU lane must use ARM64 AAVMF with Microsoft keys and reports success only when WinPE confirms
+Secure Boot. The PiKVM lane exposes the raw image as flash media, prompts for credentials, and expects
+manual SL7 power/USB selection. Neither lane lifts the real-install bar.
+
 ## Session
 
 Prefer one issue per session. Tiny same-risk fixes in touched code are fine — do not leave obvious breakage to obey “no drive-bys.” Apply `ready-for-agent` when starting scoped implement work. Keep `just check` green. Commits when asked: `docs:` · `feat(scope):` · `fix(scope):` …
