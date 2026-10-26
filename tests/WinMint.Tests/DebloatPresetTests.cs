@@ -273,7 +273,7 @@ public class DebloatPresetTests
         Assert.Equal(expanded.Value.DisableOptionalFeatures, parsed.Value.DisableOptionalFeatures);
         Assert.Empty(parsed.Value.WingetPackages);
         Assert.Equal(
-            ["Git.MinGit", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "Microsoft.Coreutils", "Nilesoft.Shell"],
+            ["Git.Git", "Microsoft.PowerShell", "Microsoft.WindowsTerminal", "Microsoft.Coreutils", "Nilesoft.Shell"],
             ProductPosture.MergeWinget(parsed.Value.WingetPackages));
         Assert.Empty(parsed.Value.WslDistros);
 

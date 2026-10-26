@@ -20,6 +20,16 @@ powershell -NoProfile -File .\Apply-LivePosture.ps1
 
 `-DryRun` prints the planned changes and writes nothing. Pass `-Drivers` to include the Surface Laptop 7 ARM64 catalog MSI. Sign out after a real run. Language, time zone, UAC, Reserved Storage, and location stay as they are.
 
+Until a WinMint USB install is proven, the maintainer's machine is set up in this order:
+
+1. Install from stock Microsoft media.
+2. Run Windows Update.
+3. Run Live posture.
+4. Run the [dotfiles](https://github.com/yanai-sh/dotfiles) bootstrap.
+5. Install WSL.
+
+Live posture does not install packages, fonts, shell profiles, or desktop surfaces ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
+
 Registry scripts are the files in `post-install/registry/`. OneDrive, the inbox strip, and Surface drivers sit next to `Apply-LivePosture.ps1`. Each script also runs on its own from any folder. A second run leaves the same result. `Apply-LivePosture.ps1` finds its scripts next to itself, or under `registry\` beside it.
 
 ## Output ISO

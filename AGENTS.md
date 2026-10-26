@@ -25,7 +25,7 @@ Open by branch:
 | Domain-doc habit for engineering skills | [docs/agents/domain.md](docs/agents/domain.md) |
 | Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Identity bars (detail is ADRs + code): maintainer-only until usable, current Output ISO is unstable install media, Live posture is the operator path ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)) · Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)).
+Identity bars (detail is ADRs + code): maintainer-only until usable, current Output ISO is unstable install media, Live posture is the operator path ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)) · Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)) · post-install is stock install → Live posture → dotfiles ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
 
 ## Map
 
@@ -61,6 +61,8 @@ Pins: `global.json`, `Directory.Build.props` (no CPM / `Directory.Packages.props
 **Clock** — Maintainer zone is Asia/Jerusalem (Tel Aviv). SL7’s system time can jump backward at random even after a sync (faulty DMA workaround on this machine, not product DMA settle). Do not trust `Get-Date`, `[datetime]::UtcNow`, file `LastWriteTime`, chat timestamps, or harness remaining-time as elapsed truth. Smoke stall/wall and the DVD boot-nudge window are wall-clock: a backward jump inflates them. If remaining time grows or files look newer than “now,” the clock jumped — stop treating those timers as elapsed and ask the human. A sync is temporary.
 
 **Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft **English (US)** 26H2 ARM64 ISO on this host (family 26300; DISM `Languages : en-US`; not English International). 25H2 (26200) remains a same-train mapping. Path and recipes: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
+
+**Post-install workflow** — Until a WinMint USB install is proven, the order is stock Microsoft install, Windows Update, Live posture, dotfiles (chezmoi), then WSL. WinMint owns only Layer 0, through Live posture. Do not grow `post-install/` into a second FirstLogon ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
 
 **Maintainer signals** — Weekly Catalog B-release: GitHub Actions workflow **health** (subscribe to failures). SL7 ISO + Catalog: `just maintainer-check` (optional Task Scheduler; see fixture notes). Catalog-only: `just quality-check`.
 

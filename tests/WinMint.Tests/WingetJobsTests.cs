@@ -49,7 +49,7 @@ public class WingetJobsTests
         Assert.Equal("winget.jqlang.jq", jq.Id);
         ProvisionJob vscode = Assert.Single(jobs, j => j.Kind == ProvisionJobKind.Winget && j.PackageId == "Microsoft.VisualStudioCode");
         Assert.Equal("winget.Microsoft.VisualStudioCode", vscode.Id);
-        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.MinGit" });
+        Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Git.Git" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.PowerShell" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.WindowsTerminal" });
         Assert.Contains(jobs, j => j is { Kind: ProvisionJobKind.Winget, PackageId: "Microsoft.Coreutils" });

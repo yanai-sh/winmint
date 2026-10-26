@@ -139,7 +139,7 @@ public class WingetImportTests
     [Fact]
     public void Plan_effective_facts_are_ordered_deduped_and_agree_with_package_jobs()
     {
-        Profile profile = LabProfile(winget: ["Anysphere.Cursor", "git.mingit"]) with
+        Profile profile = LabProfile(winget: ["Anysphere.Cursor", "git.git"]) with
         {
             WingetNeedsReboot = ["Anysphere.Cursor"],
             ScoopPackages = ["neovim", "STARSHIP"],
@@ -155,7 +155,7 @@ public class WingetImportTests
         EffectivePackageFact[] facts = [.. result.Value.EffectivePackages];
         Assert.Equal(ProductPosture.WingetIds[0], facts[0].ResolvedInstallId);
         Assert.Equal(EffectivePackageOrigin.ProductPosture, facts[0].Origin);
-        Assert.Equal(1, facts.Count(f => f.ResolvedInstallId.Equals("Git.MinGit", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(1, facts.Count(f => f.ResolvedInstallId.Equals("Git.Git", StringComparison.OrdinalIgnoreCase)));
         Assert.Contains(
             facts,
             f => f is
