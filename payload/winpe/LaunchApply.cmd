@@ -28,6 +28,9 @@ if not defined INSTALL (
   exit /b 1
 )
 echo WinMint: found install.wim on drive %INSTALL%:
+rem Test-only media asks WinPE to prove that firmware booted the removable path and
+rem that its NTFS payload was visible. This exits before enumerating target disks.
+if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
 rem A second boot of this USB must not clean the disk. A finished install turns the PC off.
 if exist "%INSTALL%:\winmint-reinstall.txt" (
   del /f /q "%INSTALL%:\winmint-reinstall.txt"
@@ -140,6 +143,38 @@ echo WinMint apply complete> "W:\Windows\WinMint.applied"
 echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
 exit /b 0
+
+:winmint_boot_probe
+set WINMINT_PROBE_CHALLENGE=
+for %%f in ("%INSTALL%:\winmint-boot-probe.txt") do if not "%%~zf"=="32" goto :winmint_boot_probe_invalid
+findstr /r /x "[0-9a-f][0-9a-f]*" "%INSTALL%:\winmint-boot-probe.txt" >nul
+if errorlevel 1 goto :winmint_boot_probe_invalid
+set /p WINMINT_PROBE_CHALLENGE=<"%INSTALL%:\winmint-boot-probe.txt"
+if not defined WINMINT_PROBE_CHALLENGE goto :winmint_boot_probe_invalid
+set WINMINT_SECURE_BOOT=
+for /f "tokens=3" %%s in ('reg query HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State /v UEFISecureBootEnabled 2^>nul ^| findstr /i UEFISecureBootEnabled') do set WINMINT_SECURE_BOOT=%%s
+if /i not "%WINMINT_SECURE_BOOT%"=="0x1" goto :winmint_boot_probe_insecure
+> "%INSTALL%:\winmint-boot-probe.json" echo {"schemaVersion":"winmint.usb-boot-probe/v1","result":"passed","secureBoot":true,"challenge":"%WINMINT_PROBE_CHALLENGE%"}
+echo.
+echo WINMINT USB BOOT PROBE PASSED %WINMINT_PROBE_CHALLENGE%
+echo Secure Boot loaded WinPE and WinPE found the NTFS payload. No target disk was inspected or changed.
+timeout /t 30 /nobreak >nul
+wpeutil shutdown
+exit /b 0
+
+:winmint_boot_probe_insecure
+> "%INSTALL%:\winmint-boot-probe.json" echo {"schemaVersion":"winmint.usb-boot-probe/v1","result":"failed","secureBoot":false,"challenge":"%WINMINT_PROBE_CHALLENGE%"}
+echo.
+echo WINMINT USB BOOT PROBE FAILED: SECURE BOOT IS NOT ENABLED
+timeout /t 30 /nobreak >nul
+wpeutil shutdown
+exit /b 1
+
+:winmint_boot_probe_invalid
+echo WINMINT USB BOOT PROBE FAILED: CHALLENGE IS MISSING
+timeout /t 30 /nobreak >nul
+wpeutil shutdown
+exit /b 1
 
 :winmint_finished
 echo WinMint: already installed. Unplug the USB, then turn the laptop on.

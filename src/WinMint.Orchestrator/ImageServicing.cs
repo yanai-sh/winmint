@@ -81,6 +81,8 @@ public static partial class ImageServicing
         Directory.CreateDirectory(workspace.Logs);
         Directory.CreateDirectory(HostServicingRoot);
 
+        File.Delete(workspace.UsbMediaReceipt);
+
         // At most one Output ISO per workdir; drop prior leaves before this Apply.
         _ = WorkdirOutputIsos.ClearPrior(workspace.Root, normalized.OutputIsoPath);
 

@@ -81,6 +81,7 @@ public class ImageServicingApplyTests
                     ServicingOpcode.AddQualityUpdates,
                     ServicingOpcode.PatchBootWimApply,
                     ServicingOpcode.ExportWim,
+                    ServicingOpcode.PublishUsbMedia,
                     ServicingOpcode.BuildIso,
                 ],
                 runner.Opcodes.ToArray());
@@ -469,6 +470,34 @@ public class ImageServicingApplyTests
 
             Assert.False(result.IsOk);
             Assert.Equal("servicing.evidence.digests.missing", result.Error.Code);
+        }
+        finally
+        {
+            TryDelete(work);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_rejects_usb_receipt_changed_after_digest()
+    {
+        BuildArtifacts plan = MinimalPlan();
+        string work = NewTempDir();
+        try
+        {
+            ServicingRun run = new(
+                SourceIsoPath: Path.Combine(work, "source.iso"),
+                WorkDirectory: work,
+                OutputIsoPath: Path.Combine(work, "out.iso"));
+            File.WriteAllText(run.SourceIsoPath, "iso-stub");
+
+            Result<ImageEvidence, Failure> result = await ImageServicing.ApplyAsync(
+                plan,
+                run,
+                new RecordingElevatedPlanRunner { CorruptUsbReceiptAfterDigest = true },
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsOk);
+            Assert.Equal("servicing.evidence.digests.usbMedia", result.Error.Code);
         }
         finally
         {

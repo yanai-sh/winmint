@@ -1,6 +1,6 @@
 # WinMint — Agent contract
 
-Maintainer working tree (**alpha**). Not ready for anyone else to run. Current operator path: **Live posture** in `post-install/` (Windows PowerShell 5.1 and pwsh 7). The Output ISO is unstable and must not be used to install. A portable ISO that installs cleanly remains the goal ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)).
+Maintainer working tree (**alpha**). Not ready for anyone else to run. Current operator path: **Live posture** in `post-install/` (Windows PowerShell 5.1 and pwsh 7). The Output ISO is unstable and must not be used to install. Product-owned USB media that installs cleanly is the metal goal ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md), [ADR-019](docs/decisions/ADR-019-product-owned-usb-media.md)).
 
 **ARM64-first**. Host Servicing: **pwsh 7.6+**. Guest FirstLogon: **Provisioning Supervisor**; packages may delegate to platform tools.
 
@@ -46,6 +46,7 @@ Identity bars (detail is ADRs + code): maintainer-only until usable, current Out
 | Host recipes | `Justfile`, `tools/host/` |
 | Smoke / Hyper-V | `tools/vm/` |
 | Host Apply (S5) | `tools/apply/` |
+| USB media publish / guarded write | `src/WinMint.Orchestrator` + `servicing/Publish-UsbMedia.ps1`, `servicing/Write-UsbMedia.ps1` |
 | CI / health / release / warm-media bench | `tools/ci/`, `tools/release/`, `tools/bench/` |
 | Bootstrap Worker (`winmint.yanai.sh`) | `cloudflare/winmint/` |
 | README brand assets | `assets/` |
@@ -75,6 +76,20 @@ just smoke-maintainer-monitor
 # Custom ISO only: just smoke 'C:\Users\yanai\Documents\Windows11_Client_arm64_en-us_26300_9457.iso'
 # Extra Watch attach: just watch-smoke .scratch/smoke
 ```
+
+USB acceptance remains maintainer-only. After a successful Apply work directory exists, validate its
+receipt-bound media, build one probe image, then exercise distinct firmware boundaries:
+
+```powershell
+just usb-static-verify .scratch/sl7-build C:\tools\wimlib-imagex.exe
+just usb-test-image .scratch/sl7-build .scratch\usb-probe.vhdx .scratch\usb-probe.img C:\tools\qemu-img.exe
+just usb-qemu-probe .scratch\usb-probe.vhdx C:\firmware\AAVMF_CODE.ms.fd C:\firmware\AAVMF_VARS.ms.fd C:\tools\qemu-system-aarch64.exe
+just usb-pikvm-probe https://pikvm.example .scratch\usb-probe.img .scratch\usb-probe.vhdx.json
+```
+
+The QEMU lane must use ARM64 AAVMF with Microsoft keys and reports success only when WinPE confirms
+Secure Boot. The PiKVM lane exposes the raw image as flash media, prompts for credentials, and expects
+manual SL7 power/USB selection. Neither lane lifts the real-install bar.
 
 ## Session
 
