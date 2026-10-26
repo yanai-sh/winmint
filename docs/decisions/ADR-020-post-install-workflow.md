@@ -38,7 +38,7 @@ On a post-install machine, dotfiles is the source of truth for the user-layer fi
 
 WinMint does not write `/etc/wsl.conf` or `.wslconfig` ([research](../research/2026-08-09-wslconfig-modern.md)).
 
-The dotfiles Windows package list must cover what `just check` needs on the Host: pwsh 7.6+, the .NET SDK pinned in `global.json`, and `just`. Smoke also needs Hyper-V. These packages must have native ARM64 builds.
+The dotfiles Windows package list must cover what `just check` needs on the Host: pwsh 7.6+, the .NET SDK pinned in `global.json`, and `just`. It also needs full Git for Windows, not MinGit, because Cursor CLI agent workers need Git Bash. Smoke also needs Hyper-V. These packages must have native ARM64 builds.
 
 ### Review trigger
 
