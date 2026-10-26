@@ -25,7 +25,7 @@ Open by branch:
 | Domain-doc habit for engineering skills | [docs/agents/domain.md](docs/agents/domain.md) |
 | Operator / legal policy | [README.md](README.md), [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md) |
 
-Identity bars (detail is ADRs + code): maintainer-only until usable, current Output ISO is unstable install media, Live posture is the operator path ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)) · Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)) · dev environment is dotfiles over Live posture ([ADR-019](docs/decisions/ADR-019-developer-environment-layers.md)).
+Identity bars (detail is ADRs + code): maintainer-only until usable, current Output ISO is unstable install media, Live posture is the operator path ([ADR-018](docs/decisions/ADR-018-maintainer-only-until-usable.md)) · Source ISO · Supervisor FirstLogon · remove-list / no presets-in-JSON / CDM not primary · residual erase · single-image WIM · `winmint.profile/v1` until a real break · desktop surfaces as two axes ([ADR-015](docs/decisions/ADR-015-desktop-surfaces.md)) · Wizard never exposes Lane ([ADR-016](docs/decisions/ADR-016-wizard-no-lane.md)) · bake-in username + password at build ([ADR-017](docs/decisions/ADR-017-account-modes.md)) · post-install is stock install → Live posture → dotfiles ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
 
 ## Map
 
@@ -62,7 +62,7 @@ Pins: `global.json`, `Directory.Build.props` (no CPM / `Directory.Packages.props
 
 **Vanilla Source ISO (Smoke / Host Apply)** — Official Microsoft **English (US)** 26H2 ARM64 ISO on this host (family 26300; DISM `Languages : en-US`; not English International). 25H2 (26200) remains a same-train mapping. Path and recipes: [tests/fixtures/maintainer-host.json](tests/fixtures/maintainer-host.json). User-supplied only ([ADR-001](docs/decisions/ADR-001-source-iso-legal.md)); never commit the ISO bytes; CI must not fetch Windows media.
 
-**Developer environment** — The dotfiles repository (chezmoi) owns user state and toolchains. WinMint owns only Layer 0, through Live posture ([ADR-019](docs/decisions/ADR-019-developer-environment-layers.md)).
+**Post-install workflow** — Until a WinMint USB install is proven, the order is stock Microsoft install, Windows Update, Live posture, dotfiles (chezmoi), then WSL. WinMint owns only Layer 0, through Live posture. Do not grow `post-install/` into a second FirstLogon ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
 
 **Maintainer signals** — Weekly Catalog B-release: GitHub Actions workflow **health** (subscribe to failures). SL7 ISO + Catalog: `just maintainer-check` (optional Task Scheduler; see fixture notes). Catalog-only: `just quality-check`.
 
