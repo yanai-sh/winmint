@@ -1,6 +1,6 @@
 # ADR-019: Product-owned USB install media
 
-**Status:** Accepted · **Date:** 2026-10-26  
+**Status:** Accepted · **Date:** 2026-10-26
 **Supersedes:** [ADR-012](ADR-012-flash-outside-product-seam.md)
 
 ### Context
