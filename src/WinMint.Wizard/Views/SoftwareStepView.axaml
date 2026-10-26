@@ -125,7 +125,7 @@
     <Expander Header="Advanced packages (optional)" IsExpanded="False">
       <StackPanel Spacing="8" Margin="0,8,0,0">
         <TextBlock Classes="hero-sub"
-                   Text="Extra install ids merge with chips. MinGit and Nilesoft Shell are always installed." />
+                   Text="Extra install ids merge with chips. Git for Windows and Nilesoft Shell are always installed." />
         <TextBlock Classes="panel-label" Text="Winget install IDs" />
         <TextBox AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
                  PlaceholderText="Anysphere.Cursor&#x0A;Zen-Team.Zen-Browser"

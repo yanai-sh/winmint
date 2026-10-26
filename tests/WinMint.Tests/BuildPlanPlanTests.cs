@@ -321,7 +321,7 @@ public class BuildPlanPlanTests
         Assert.DoesNotContain(artifacts.Jobs.Jobs, j => j.Kind == ProvisionJobKind.Wsl);
         Assert.DoesNotContain(
             artifacts.EffectivePackages,
-            p => string.Equals(p.ResolvedInstallId, ProductPosture.MinGitWingetId, StringComparison.OrdinalIgnoreCase));
+            p => string.Equals(p.ResolvedInstallId, ProductPosture.GitWingetId, StringComparison.OrdinalIgnoreCase));
         Assert.Empty(artifacts.EffectiveWinget);
     }
 
