@@ -46,6 +46,7 @@ Identity bars (detail is ADRs + code): maintainer-only until usable, current Out
 | Host recipes | `Justfile`, `tools/host/` |
 | Smoke / Hyper-V | `tools/vm/` |
 | Host Apply (S5) | `tools/apply/` |
+| USB media publish / guarded write | `src/WinMint.Orchestrator` + `servicing/Publish-UsbMedia.ps1`, `servicing/Write-UsbMedia.ps1` |
 | CI / health / release / warm-media bench | `tools/ci/`, `tools/release/`, `tools/bench/` |
 | Bootstrap Worker (`winmint.yanai.sh`) | `cloudflare/winmint/` |
 | README brand assets | `assets/` |

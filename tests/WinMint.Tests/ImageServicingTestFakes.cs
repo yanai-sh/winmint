@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 
 using WinMint.Orchestrator;
@@ -10,6 +11,7 @@ internal static class ImageServicingTestFakes
     {
         public List<ServicingStage> Stages { get; } = [];
         public IEnumerable<ServicingOpcode> Opcodes => Stages.Select(s => s.Opcode);
+        public bool CorruptUsbReceiptAfterDigest { get; init; }
 
         public Task<Result<ElevatedRunOk, Failure>> ExecuteAsync(
             ServicingWorkspace workspace,
@@ -53,13 +55,30 @@ internal static class ImageServicingTestFakes
                 File.WriteAllText(outputIso, "fake-iso");
             }
 
+            ServicingStage? publishUsb = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.PublishUsbMedia);
+            if (publishUsb is null
+                || !publishUsb.Parameters.TryGetValue(StageParams.UsbMediaReceiptPath, out string? receiptPath)
+                || string.IsNullOrWhiteSpace(receiptPath))
+            {
+                return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
+                    new Failure("servicing.usbMedia.missing", "PublishUsbMedia stage missing receipt path.")));
+            }
+            File.WriteAllText(receiptPath, """{"schemaVersion":"winmint.usb-media/v1","files":[]}""");
+            string receiptSha = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(receiptPath)));
+
             Directory.CreateDirectory(workspace.Logs);
             File.WriteAllText(
                 workspace.Digests,
                 JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["outputIso.sha256"] = new string('a', 64),
+                    ["usbMedia.sha256"] = receiptSha,
                 }));
+            if (CorruptUsbReceiptAfterDigest)
+            {
+                File.AppendAllText(receiptPath, " ");
+            }
+
             return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
         }
     }

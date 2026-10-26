@@ -34,6 +34,14 @@ format-check:
 check:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-CheckGate.ps1'
 
+# Elevated pwsh only. First command prints the disk-bound token without changing the disk.
+usb-write-preflight WORK DISK:
+    pwsh -NoProfile -File '{{justfile_directory()}}/servicing/Write-UsbMedia.ps1' -WorkDirectory '{{WORK}}' -DiskNumber {{DISK}} -WhatIf
+
+# Elevated pwsh only. TOKEN must be copied from usb-write-preflight for the same unchanged disk.
+usb-write WORK DISK TOKEN:
+    pwsh -NoProfile -File '{{justfile_directory()}}/servicing/Write-UsbMedia.ps1' -WorkDirectory '{{WORK}}' -DiskNumber {{DISK}} -DestructiveToken '{{TOKEN}}'
+
 # Discover tests/contract/Test-*.ps1 (WinPE / DISM / release helpers that cannot run on a live host).
 contract-tests:
     pwsh -NoProfile -File '{{justfile_directory()}}/tests/contract/Invoke-ContractTests.ps1'

@@ -23,6 +23,7 @@ public class ServicingWorkspaceTests
         Assert.Equal(Path.Combine(root, "install.wim"), ws.InstallWim);
         Assert.Equal(Path.Combine(root, "unattend.xml"), ws.Unattend);
         Assert.Equal(Path.Combine(root, "logs", "digests.json"), ws.Digests);
+        Assert.Equal(Path.Combine(root, "usb-media.json"), ws.UsbMediaReceipt);
         Assert.Equal(Path.Combine(root, "quality-packages"), ws.QualityPackages);
         Assert.Equal("media.incoming-", ServicingWorkspace.IncomingMediaPrefix);
         Assert.Equal("media.previous-", ServicingWorkspace.PreviousMediaPrefix);
@@ -85,6 +86,7 @@ public class ServicingWorkspaceTests
             {
                 Assert.Contains(digest, keys);
             }
+            Assert.Contains("usbMedia.sha256", keys);
 
             HashSet<string> winget = doc.RootElement.GetProperty("requiredWingetIds")
                 .EnumerateArray()

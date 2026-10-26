@@ -163,6 +163,7 @@ public static class StageParams
     public const string Architecture = "architecture";
     public const string QualityPackageDir = "qualityPackageDir";
     public const string QualityCacheRoot = "qualityCacheRoot";
+    public const string UsbMediaReceiptPath = "usbMediaReceiptPath";
 }
 
 public enum ServicingOpcode
@@ -181,6 +182,7 @@ public enum ServicingOpcode
     InjectDrivers,
     AddQualityUpdates,
     ExportWim,
+    PublishUsbMedia,
     BuildIso,
 }
 

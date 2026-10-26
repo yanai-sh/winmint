@@ -57,6 +57,7 @@ public class BrowserPolicyPlanTests
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
+                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             result.Value.Stages);

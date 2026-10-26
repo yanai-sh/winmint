@@ -34,6 +34,7 @@ public class WinPeApplyPlanTests
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
+                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages);
@@ -84,6 +85,15 @@ public class WinPeApplyPlanTests
                     && media.EndsWith("media", StringComparison.OrdinalIgnoreCase)
                     && s.Parameters.TryGetValue(StageParams.QualityPackageDir, out string? pkg)
                     && pkg.EndsWith("quality-packages", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                runner.Stages,
+                s => s.Opcode == ServicingOpcode.PublishUsbMedia
+                    && s.Parameters.TryGetValue(StageParams.UsbMediaReceiptPath, out string? receipt)
+                    && receipt == Path.Combine(work, ServicingWorkspace.UsbMediaReceiptFileName)
+                    && s.Parameters.TryGetValue(StageParams.SourceIsoSha256, out string? sourceSha)
+                    && sourceSha is { Length: 64 }
+                    && s.Parameters.TryGetValue(StageParams.WimIndex, out string? publishIndex)
+                    && publishIndex == "3");
             string written = File.ReadAllText(Path.Combine(work, "unattend.xml"));
             Assert.DoesNotContain("windowsPE", written, StringComparison.Ordinal);
         }
