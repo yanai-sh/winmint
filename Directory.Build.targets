@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <!-- NativeAOT leaves the documentation file in obj and does not copy it into the RID output folder.
+         Publish then fails MSB3030 on bin\...\$(AssemblyName).xml. GenerateDocumentationFile stays on for IDE0005.
+         Set here, not in Directory.Build.props: PublishAot is assigned in the project, after props import. -->
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+  </PropertyGroup>
+</Project>
