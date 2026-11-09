@@ -15,6 +15,8 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 # path through; -WorkDirectory unused would replace the caller's WorkDirectory.
 $work = (Resolve-Path -LiteralPath $WorkDirectory).Path
 . (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
+. (Join-Path $repo 'servicing\WinPeApplyContract.ps1')
+. (Join-Path $repo 'servicing\Patch-BootWimApply.ps1') -MediaDir $work -MountDir $work -WorkDirectory $work -QualityPackageDir $work
 
 $receipt = Read-WinMintUsbReceipt -WorkDirectory $work
 $mediaDir = Join-Path $work 'media'
@@ -34,6 +36,46 @@ foreach ($relativePath in @('sources/boot.wim', 'sources/install.wim')) {
     }
 }
 
+# Same defects publish refuses, without a second DISM mount. wimlib extract is the
+# stand-in for a read-only mount of the four files Get-WinPeApplyDefect reads.
+$bootWim = Resolve-WinMintUsbEntryPath -Root $mediaDir -RelativePath 'sources/boot.wim'
+$bootInfo = & $wimlib info $bootWim 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) {
+    throw "wimlib info failed for sources/boot.wim with exit code $LASTEXITCODE"
+}
+$imageCountMatch = [regex]::Match($bootInfo, '(?m)^Image Count:\s*(\d+)\s*$')
+if (-not $imageCountMatch.Success) { throw 'boot.wim has no indexes' }
+$imageCount = [int] $imageCountMatch.Groups[1].Value
+if ($imageCount -le 0) { throw 'boot.wim has no indexes' }
+$applyPaths = @(
+    'Windows/System32/LaunchApply.cmd',
+    'Windows/System32/winpeshl.ini',
+    'Windows/System32/WinMintApply.exe',
+    'Windows/System32/winpe.jpg'
+)
+$extractRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-static-boot-' + [guid]::NewGuid().ToString('N'))
+try {
+    foreach ($index in 1..$imageCount) {
+        $mountDir = Join-Path $extractRoot ([string] $index)
+        New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
+        $extractExit = 0
+        foreach ($applyPath in $applyPaths) {
+            & $wimlib extract $bootWim ([string] $index) $applyPath "--dest-dir=$mountDir" --preserve-dir-structure --no-acls 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0 -and $extractExit -eq 0) { $extractExit = $LASTEXITCODE }
+        }
+        $defects = Get-WinPeApplyDefect -MountDir $mountDir -WorkDirectory $work
+        if ($defects.Count -gt 0) {
+            throw "USB media boot.wim index ${index} is not WinPE apply media: $($defects -join '; ')"
+        }
+        if ($extractExit -ne 0) {
+            throw "wimlib extract failed for sources/boot.wim index ${index} with exit code $extractExit"
+        }
+    }
+}
+finally {
+    Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $efiEvidence = @()
 $efiEntries = @($receipt.Document.files | Where-Object {
         [string] $_.destination -ceq 'both' -and [string] $_.path -match '(?i)\.efi$'
@@ -51,7 +93,7 @@ foreach ($entry in $efiEntries) {
     if ($signature.Status -ne [Management.Automation.SignatureStatus]::Valid) {
         throw "EFI signature is not valid: $($entry.path) ($($signature.Status))"
     }
-    if ([string] $entry.path -in $pca2023Required -and "$subject`n$issuer" -notmatch 'Windows UEFI CA 2023') {
+    if ([string] $entry.path -in $pca2023Required -and -not (Test-WinMintBootManagerCa2023 -Signature $signature)) {
         throw "EFI binary is not signed through Windows UEFI CA 2023: $($entry.path)"
     }
     $efiEvidence += [ordered]@{
@@ -65,6 +107,25 @@ foreach ($requiredPath in $pca2023Required) {
     if ($requiredPath -notin @($efiEntries | ForEach-Object { [string] $_.path })) {
         throw "USB receipt is missing a boot-critical EFI binary: $requiredPath"
     }
+}
+$aa64Hash = [string] @($efiEvidence | Where-Object { $_.path -ceq 'efi/boot/bootaa64.efi' })[0].sha256
+$mgfwHash = [string] @($efiEvidence | Where-Object { $_.path -ceq 'efi/microsoft/boot/bootmgfw.efi' })[0].sha256
+if ($aa64Hash -cne $mgfwHash) {
+    throw 'bootaa64.efi and bootmgfw.efi must be the same SHA-256'
+}
+
+$bootStlPath = 'efi/microsoft/boot/boot.stl'
+$stlEntries = @($receipt.Document.files | Where-Object { [string] $_.path -ceq $bootStlPath })
+if ($stlEntries.Count -ne 1) { throw "USB receipt is missing ${bootStlPath}" }
+$stlFile = Resolve-WinMintUsbEntryPath -Root $mediaDir -RelativePath $bootStlPath
+$stlItem = Get-Item -LiteralPath $stlFile
+if ($stlItem.Length -le 0) { throw 'boot.stl is empty' }
+$stlHash = (Get-FileHash -LiteralPath $stlFile -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($stlHash -cne [string] $stlEntries[0].sha256) { throw "USB target digest mismatch: $bootStlPath" }
+$bootStlEvidence = [ordered]@{
+    path = $bootStlPath
+    sha256 = $stlHash
+    length = [long] $stlItem.Length
 }
 
 $bcdPath = Join-Path $mediaDir 'efi\microsoft\boot\bcd'
@@ -91,6 +152,7 @@ $evidence = [ordered]@{
     wimlibVersion = [string] (& $wimlib --version | Select-Object -First 1)
     wims = $wimEvidence
     efi = $efiEvidence
+    bootStl = $bootStlEvidence
     bcdSha256 = (Get-FileHash -LiteralPath $bcdPath -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 $evidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $output -Encoding utf8

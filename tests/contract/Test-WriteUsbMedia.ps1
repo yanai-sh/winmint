@@ -71,12 +71,10 @@ try {
     $receiptSha = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath (Join-Path $work 'logs\digests.json') -Encoding utf8 `
         -Value (@{ 'usbMedia.sha256' = $receiptSha } | ConvertTo-Json)
-    Set-Content -LiteralPath (Join-Path $work 'evidence.json') -Encoding utf8 `
-        -Value (@{ schemaVersion = 'winmint.image.evidence/v1'; digests = @{ 'usbMedia.sha256' = $receiptSha } } | ConvertTo-Json)
     $read = Read-WinMintUsbReceipt -WorkDirectory $work
-    if ($read.Sha256 -cne $receiptSha) { throw 'receipt evidence binding' }
-    Remove-Item -LiteralPath (Join-Path $work 'evidence.json') -Force
-    Assert-Throws { Read-WinMintUsbReceipt -WorkDirectory $work } 'Successful Apply evidence missing'
+    if ($read.Sha256 -cne $receiptSha) { throw 'receipt digest binding' }
+    Remove-Item -LiteralPath (Join-Path $work 'logs\digests.json') -Force
+    Assert-Throws { Read-WinMintUsbReceipt -WorkDirectory $work } 'Digest map missing'
 
     $source = Join-Path $tmp 'source'
     $boot = Join-Path $tmp 'boot'
@@ -106,32 +104,21 @@ try {
     Assert-Throws {
         Resolve-WinMintUsbEntryPath -Root $payload -RelativePath '../escape'
     } '(normalized|escapes)'
+    $volumeRoot = '\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\'
+    $volumeFile = Resolve-WinMintUsbEntryPath -Root $volumeRoot -RelativePath 'efi/boot/bootaa64.efi'
+    if ($volumeFile -cne '\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\efi\boot\bootaa64.efi') {
+        throw "volume root join failed: $volumeFile"
+    }
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $writer = Get-Content -LiteralPath (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -Raw -Encoding utf8
+if ($writer -match 'evidence\.json|outputIso') {
+    throw 'USB write must bind usb-media.json, not ImageEvidence or the Output ISO'
+}
 if ($writer -match 'PhysicalDrive|WriteAllBytes') { throw 'writer must not raw-write a physical drive' }
-$espStart = $writer.IndexOf('$bootPartition = New-Partition', [StringComparison]::Ordinal)
-$payloadStart = $writer.IndexOf('$payloadPartition = New-Partition', $espStart + 1, [StringComparison]::Ordinal)
-$bootCreate = if ($espStart -ge 0 -and $payloadStart -gt $espStart) {
-    $writer.Substring($espStart, $payloadStart - $espStart)
-} else { '' }
-if ($bootCreate -notmatch 'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7' `
-    -or $bootCreate -notmatch 'AssignDriveLetter') {
-    throw 'boot partition must be mounted as FAT32 basic data for copy'
-}
-$verifyAt = $writer.LastIndexOf('Test-WinMintUsbReceiptContent', [StringComparison]::Ordinal)
-$removeBootAt = $writer.IndexOf(
-    'Remove-PartitionAccessPath -DiskNumber $DiskNumber',
-    $verifyAt,
-    [StringComparison]::Ordinal)
-$setEspAt = $writer.IndexOf("Set-Partition -DiskNumber `$DiskNumber", $removeBootAt, [StringComparison]::Ordinal)
-if ($verifyAt -lt 0 -or $removeBootAt -le $verifyAt -or $setEspAt -le $removeBootAt `
-    -or $writer.Substring($setEspAt, 300) -notmatch 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b') {
-    throw 'writer must verify, unmount, then convert the boot partition to ESP'
-}
 $recheckAt = $writer.IndexOf('Assert-WinMintUsbIdentityUnchanged', [StringComparison]::Ordinal)
 $clearAt = $writer.LastIndexOf('Clear-Disk', [StringComparison]::Ordinal)
 if ($recheckAt -lt 0 -or $clearAt -lt 0 -or $recheckAt -ge $clearAt) {

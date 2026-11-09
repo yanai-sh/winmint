@@ -51,58 +51,98 @@ $mediaDir = Join-Path $work 'media'
 Assert-WinMintUsbReceiptSource -MediaDir $mediaDir -Receipt $receipt
 $probeChallenge = [guid]::NewGuid().ToString('N')
 
-if (-not (Get-Command New-VHD -ErrorAction SilentlyContinue)) {
-    throw 'Hyper-V PowerShell tools are required for New-VHD and Mount-VHD'
+function Invoke-ProbeDiskpart {
+    param([Parameter(Mandatory)] [string[]] $Lines)
+    $scriptPath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-probe-' + [guid]::NewGuid().ToString('N') + '.txt')
+    [IO.File]::WriteAllLines($scriptPath, $Lines, [Text.Encoding]::ASCII)
+    try {
+        $output = & "$env:SystemRoot\System32\diskpart.exe" /s $scriptPath
+        $exit = $LASTEXITCODE
+    }
+    finally {
+        Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
+    }
+    $text = $output -join "`n"
+    if ($exit -ne 0 -or $text -match 'DiskPart has encountered an error') {
+        throw "diskpart failed (${exit}): $text"
+    }
+}
+
+function Resolve-ProbeDiskNumber {
+    param([Parameter(Mandatory)] [string] $ImagePath)
+    $imageFull = [IO.Path]::GetFullPath($ImagePath)
+    $deadline = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        foreach ($disk in @(Get-Disk -ErrorAction Stop)) {
+            $location = [string] $disk.Location
+            if ([string]::IsNullOrWhiteSpace($location)) { continue }
+            if ($location.StartsWith('\\?\')) { $location = $location.Substring(4) }
+            try {
+                $locationFull = [IO.Path]::GetFullPath($location)
+            }
+            catch {
+                continue
+            }
+            if ($locationFull.Equals($imageFull, [StringComparison]::OrdinalIgnoreCase)) {
+                return [int] $disk.Number
+            }
+        }
+        Start-Sleep -Milliseconds 250
+    } while ($deadline.Elapsed.TotalSeconds -lt 15)
+    throw 'Mounted probe VHD has no disk number'
 }
 
 $oneMb = 1MB
 $requiredBytes = [long] $receipt.Document.layout.requiredDiskBytes
 $imageBytes = [long] ([Math]::Ceiling($requiredBytes / [double] $oneMb) * $oneMb)
-$mounted = $null
-$bootPartition = $null
-$payloadPartition = $null
+$imageMb = [int] ($imageBytes / $oneMb)
+$attached = $false
+$layoutFailed = $false
 try {
-    New-VHD -Path $image -SizeBytes $imageBytes -Dynamic -ErrorAction Stop | Out-Null
-    $mounted = Mount-VHD -Path $image -Passthru -ErrorAction Stop
-    $diskNumber = [int] $mounted.DiskNumber
+    Invoke-ProbeDiskpart @(
+        "create vdisk file=`"$image`" maximum=$imageMb type=expandable",
+        "select vdisk file=`"$image`"",
+        'attach vdisk'
+    )
+    $attached = $true
+    $diskNumber = Resolve-ProbeDiskNumber -ImagePath $image
+    $probeDisk = Get-Disk -Number $diskNumber -ErrorAction Stop
+    if ($probeDisk.IsBoot -or $probeDisk.IsSystem) {
+        throw "Refusing to initialize boot/system disk $diskNumber"
+    }
+    $location = [string] $probeDisk.Location
+    if ([string]::IsNullOrWhiteSpace($location)) {
+        throw "Refusing to initialize disk $diskNumber; location is not the probe VHD"
+    }
+    if ($location.StartsWith('\\?\')) { $location = $location.Substring(4) }
+    $locationFull = [IO.Path]::GetFullPath($location)
+    if (-not $locationFull.Equals($image, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to initialize disk $diskNumber; location '$locationFull' is not the probe VHD"
+    }
     Set-Disk -Number $diskNumber -IsOffline $false -ErrorAction Stop
     Set-Disk -Number $diskNumber -IsReadOnly $false -ErrorAction Stop
-    Initialize-Disk -Number $diskNumber -PartitionStyle GPT -ErrorAction Stop | Out-Null
-
-    $bootPartition = New-Partition -DiskNumber $diskNumber `
-        -Size ([long] $receipt.Document.layout.boot.partitionBytes) `
-        -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter -ErrorAction Stop
-    $payloadPartition = New-Partition -DiskNumber $diskNumber -UseMaximumSize `
-        -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter -ErrorAction Stop
-    $bootPartition | Format-Volume -FileSystem FAT32 -NewFileSystemLabel 'WINMINT_BOOT' `
-        -Force -Confirm:$false -ErrorAction Stop | Out-Null
-    $payloadPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'WINMINT' `
-        -Force -Confirm:$false -ErrorAction Stop | Out-Null
-
-    $bootPartition = Get-Partition -DiskNumber $diskNumber -PartitionNumber $bootPartition.PartitionNumber
-    $payloadPartition = Get-Partition -DiskNumber $diskNumber -PartitionNumber $payloadPartition.PartitionNumber
-    $bootRoot = "$($bootPartition.DriveLetter):\"
-    $payloadRoot = "$($payloadPartition.DriveLetter):\"
-    Copy-WinMintUsbReceiptContent -MediaDir $mediaDir -BootRoot $bootRoot `
-        -PayloadRoot $payloadRoot -Receipt $receipt
-    Copy-Item -LiteralPath $receipt.Path -Destination (Join-Path $payloadRoot 'usb-media.json') -Force
-    Set-Content -LiteralPath (Join-Path $payloadRoot 'winmint-boot-probe.txt') `
-        -Value $probeChallenge -Encoding ascii -NoNewline
-    Test-WinMintUsbReceiptContent -BootRoot $bootRoot -PayloadRoot $payloadRoot -Receipt $receipt
-
-    Remove-PartitionAccessPath -DiskNumber $diskNumber `
-        -PartitionNumber $bootPartition.PartitionNumber -AccessPath $bootRoot -ErrorAction Stop
-    Set-Partition -DiskNumber $diskNumber `
-        -PartitionNumber $bootPartition.PartitionNumber `
-        -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -ErrorAction Stop
-    $bootPartition = Get-Partition -DiskNumber $diskNumber -PartitionNumber $bootPartition.PartitionNumber
-    if ([guid] $bootPartition.GptType -ne [guid] 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b') {
-        throw 'USB test image boot partition was not converted to an EFI System Partition'
+    Write-WinMintUsbPartitionContent -DiskNumber $diskNumber -MediaDir $mediaDir -Receipt $receipt -BeforeVerify {
+        param($PayloadRoot)
+        Set-Content -LiteralPath (Join-Path $PayloadRoot 'winmint-boot-probe.txt') `
+            -Value $probeChallenge -Encoding ascii -NoNewline
     }
 }
+catch {
+    $layoutFailed = $true
+    throw
+}
 finally {
-    if ($null -ne $mounted) {
-        Dismount-VHD -Path $image -ErrorAction SilentlyContinue
+    if ($attached) {
+        try {
+            Invoke-ProbeDiskpart @(
+                "select vdisk file=`"$image`"",
+                'detach vdisk'
+            )
+        }
+        catch {
+            if ($layoutFailed) { Write-Warning $_.Exception.Message }
+            else { throw }
+        }
     }
 }
 

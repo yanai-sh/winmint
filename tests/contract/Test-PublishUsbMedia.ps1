@@ -62,5 +62,55 @@ finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$publishPath = Join-Path $repo 'servicing\Publish-UsbMedia.ps1'
+$publishText = Get-Content -LiteralPath $publishPath -Raw
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    $publishPath,
+    [ref] $tokens,
+    [ref] $parseErrors)
+if ($parseErrors.Count -gt 0) {
+    throw "Publish-UsbMedia parser errors: $($parseErrors -join '; ')"
+}
+$receiptFn = $ast.Find(
+    {
+        param($Node)
+        $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $Node.Name -eq 'ConvertTo-WinMintUsbMediaReceipt'
+    },
+    $true)
+if ($null -eq $receiptFn) { throw 'ConvertTo-WinMintUsbMediaReceipt missing' }
+$receiptBody = $receiptFn.Body.Extent.Text
+if ($receiptBody -match 'Get-WinPeApplyDefect|Invoke-WinMintDism') {
+    throw 'receipt function must not call Get-WinPeApplyDefect or Invoke-WinMintDism'
+}
+
+$kernelAt = $publishText.IndexOf("if (`$MyInvocation.InvocationName -ne '.')", [StringComparison]::Ordinal)
+if ($kernelAt -lt 0) { throw 'kernel entry missing' }
+$kernel = $publishText.Substring($kernelAt)
+$helperAt = $publishText.IndexOf('Invoke-WinMintDism.ps1', [StringComparison]::Ordinal)
+if ($helperAt -lt $kernelAt) { throw 'Invoke-WinMintDism.ps1 must be dot-sourced from the kernel entry only' }
+$buildAt = $kernel.IndexOf('ConvertTo-WinMintUsbMediaReceipt', [StringComparison]::Ordinal)
+$defectAt = $kernel.IndexOf('Get-WinPeApplyDefect', [StringComparison]::Ordinal)
+$receiptPathAt = $kernel.IndexOf('UsbMediaReceiptPath', [StringComparison]::Ordinal)
+$setContentAt = $kernel.IndexOf('Set-Content', [StringComparison]::Ordinal)
+$digestAt = $kernel.IndexOf('Save-WinMintDigestMap -WorkDirectory', [StringComparison]::Ordinal)
+if ($buildAt -lt 0 -or $defectAt -lt 0 -or $receiptPathAt -lt 0 -or $setContentAt -lt 0 -or $digestAt -lt 0) {
+    throw 'kernel must build the receipt, check boot.wim, then write usb-media.json'
+}
+if ($buildAt -ge $defectAt -or $defectAt -ge $receiptPathAt -or $defectAt -ge $setContentAt -or $setContentAt -ge $digestAt) {
+    throw 'Get-WinPeApplyDefect must run after the receipt is built and before usb-media.json is written'
+}
+if ($kernel -notmatch 'foreach\s*\(\s*\$index\s+in\s+\$indexes\s*\)') {
+    throw 'kernel must check every boot.wim index'
+}
+if ($kernel -notmatch 'boot\.wim has no indexes') {
+    throw 'kernel must throw when Get-WimInfo reports no indexes'
+}
+if ($kernel -match '@\(\s*Get-WinPeApplyDefect') {
+    throw 'kernel must assign Get-WinPeApplyDefect directly; @() wraps the returned string[] and -join prints System.String[]'
+}
+
 Write-Output 'Test-PublishUsbMedia ok'
 exit 0

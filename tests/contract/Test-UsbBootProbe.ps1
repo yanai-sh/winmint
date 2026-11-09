@@ -21,16 +21,25 @@ if ($launch.Substring($probeLabel) -notmatch 'WINMINT USB BOOT PROBE PASSED' `
 }
 
 $image = Read-RepoText 'tools/usb/New-UsbMediaTestImage.ps1'
+$writer = Read-RepoText 'servicing/Write-UsbMedia.ps1'
 foreach ($required in @(
-        "GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}'",
-        "Format-Volume -FileSystem FAT32",
-        "Format-Volume -FileSystem NTFS",
         "winmint-boot-probe.txt",
         "bootProbeChallenge",
+        "Write-WinMintUsbPartitionContent",
         "`$QemuImgPath convert -f vhdx -O raw")) {
     if ($image -notmatch [regex]::Escape($required)) {
         throw "USB test-image builder is missing: $required"
     }
+}
+foreach ($forbidden in @('New-Partition', 'Format-Volume', 'Initialize-Disk', 'Set-Partition')) {
+    if ($image -match [regex]::Escape($forbidden)) {
+        throw "USB test-image builder must use Write-WinMintUsbPartitionContent, not its own $forbidden"
+    }
+}
+$beforeVerify = $writer.IndexOf('& $BeforeVerify $payloadRoot', [StringComparison]::Ordinal)
+$verifyInRecipe = $writer.IndexOf('Test-WinMintUsbReceiptContent', $beforeVerify, [StringComparison]::Ordinal)
+if ($beforeVerify -lt 0 -or $verifyInRecipe -le $beforeVerify) {
+    throw 'partition recipe must write the probe file before it verifies the receipt'
 }
 
 $qemu = Read-RepoText 'tools/usb/Invoke-QemuUsbBootProbe.ps1'
@@ -57,8 +66,44 @@ foreach ($required in @(
 }
 
 $static = Read-RepoText 'tools/usb/Test-UsbMediaArtifact.ps1'
-foreach ($required in @('wimlib', 'Get-AuthenticodeSignature', 'Windows UEFI CA 2023', 'bcdedit.exe')) {
+foreach ($required in @(
+        'wimlib',
+        'Get-WinPeApplyDefect',
+        '--preserve-dir-structure',
+        'Get-AuthenticodeSignature',
+        'Windows UEFI CA 2023',
+        'Test-WinMintBootManagerCa2023',
+        'bcdedit.exe',
+        'bootaa64.efi and bootmgfw.efi must be the same SHA-256',
+        'efi/microsoft/boot/boot.stl',
+        'boot.stl is empty',
+        'bootStl')) {
     if ($static -notmatch [regex]::Escape($required)) { throw "USB static verifier is missing: $required" }
+}
+if ($static -match '@\(\s*Get-WinPeApplyDefect') {
+    throw 'USB static verifier must assign Get-WinPeApplyDefect directly; @() wraps the returned string[] and -join prints System.String[]'
+}
+$guardAt = $image.IndexOf('Mounted probe VHD has no disk number', [StringComparison]::Ordinal)
+$layoutAt = $image.IndexOf('Write-WinMintUsbPartitionContent', [StringComparison]::Ordinal)
+if ($guardAt -lt 0 -or $layoutAt -lt 0 -or $guardAt -gt $layoutAt) {
+    throw 'USB test-image builder must refuse a missing disk number before the partition recipe'
+}
+foreach ($required in @('IsBoot', 'IsSystem', 'is not the probe VHD')) {
+    if ($image.Substring(0, $layoutAt) -notmatch [regex]::Escape($required)) {
+        throw "USB test-image disk guard is missing before the partition recipe: $required"
+    }
+}
+if ($image.IndexOf('Test-WinMintUsbReceiptContent', [StringComparison]::Ordinal) -ge 0) {
+    throw 'USB test-image builder must verify through Write-WinMintUsbPartitionContent'
+}
+foreach ($forbidden in @(
+        'Install-WinMintProbeLauncher',
+        'replace LaunchApply.cmd',
+        'replacing LaunchApply.cmd',
+        'LaunchApply.cmd inside boot.wim')) {
+    if ($image -match [regex]::Escape($forbidden)) {
+        throw 'USB test-image builder must not install LaunchProbe.cmd over LaunchApply.cmd'
+    }
 }
 foreach ($source in @($static, $image)) {
     $resolveAt = $source.IndexOf('Resolve-Path -LiteralPath $WorkDirectory', [StringComparison]::Ordinal)

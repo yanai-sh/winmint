@@ -170,12 +170,78 @@ function ConvertTo-WinMintUsbMediaReceipt {
 if ($MyInvocation.InvocationName -ne '.') {
     . (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
     . (Join-Path $PSScriptRoot 'Save-WinMintDigestMap.ps1')
+    . (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+    . (Join-Path $PSScriptRoot 'Resolve-WinMintMount.ps1')
 
     if (-not (Test-Path -LiteralPath $MediaDir -PathType Container)) {
         throw "MediaDir missing: $MediaDir"
     }
     $receipt = ConvertTo-WinMintUsbMediaReceipt `
         -MediaDir $MediaDir -SourceIsoSha256 $SourceIsoSha256 -WimIndex $WimIndex
+
+    # Marker already matched inside the receipt. Prove every boot.wim index before usb-media.json exists.
+    $bootWim = Join-Path $MediaDir 'sources\boot.wim'
+    $bootMount = Get-WinMintMountDirectory -Kind boot
+    if (Test-Path -LiteralPath $bootMount) {
+        try {
+            Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Discard') -Stage 'Unmount-Discard'
+            Remove-WinMintMountOwner -Kind boot
+        }
+        catch {
+            Write-Debug "Stale boot-mount discard before publish: $_"
+        }
+        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
+    try {
+        $info = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$bootWim") -Stage 'Get-WimInfo' -PassThruText
+        $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
+        if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
+
+        foreach ($index in $indexes) {
+            Write-WinMintMountOwner -Kind boot -WorkDirectory $WorkDirectory -MountDirectory $bootMount -ImageFile $bootWim -SourceIndex $index | Out-Null
+            try {
+                Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$bootWim", "/Index:$index", "/MountDir:$bootMount", '/ReadOnly') -Stage 'Mount-Image-ReadOnly'
+            }
+            catch {
+                $mountError = $_
+                try {
+                    Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Discard') -Stage 'Unmount-Discard'
+                    Remove-WinMintMountOwner -Kind boot
+                }
+                catch {
+                    Write-Debug "Mount-Image-ReadOnly cleanup after failure: $_"
+                }
+                throw $mountError
+            }
+            $primaryError = $null
+            try {
+                $defects = Get-WinPeApplyDefect -MountDir $bootMount -WorkDirectory $WorkDirectory
+                if ($defects.Count -gt 0) {
+                    throw "USB media boot.wim index ${index} is not WinPE apply media: $($defects -join '; ')"
+                }
+            }
+            catch {
+                $primaryError = $_
+                throw
+            }
+            finally {
+                try {
+                    Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Discard') -Stage 'Unmount-Discard'
+                    Remove-WinMintMountOwner -Kind boot
+                }
+                catch {
+                    $message = "Unmount boot.wim:${index} after apply check failed: $($_.Exception.Message)"
+                    if ($null -eq $primaryError) { throw $message }
+                    Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
+                }
+            }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     $parent = Split-Path -Parent $UsbMediaReceiptPath
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
     $temp = "$UsbMediaReceiptPath.$([guid]::NewGuid().ToString('N')).tmp"

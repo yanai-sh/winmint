@@ -13,6 +13,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) { throw 'The QEMU USB boot probe currently requires a Windows host' }
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'QEMU USB boot probe evidence extraction requires an elevated PowerShell 7.6 process'
+}
 $image = (Resolve-Path -LiteralPath $ImagePath).Path
 $firmwareCode = (Resolve-Path -LiteralPath $FirmwareCodePath).Path
 $varsTemplate = (Resolve-Path -LiteralPath $SecureBootVarsTemplatePath).Path
@@ -53,6 +58,7 @@ if ($LASTEXITCODE -ne 0) { throw "Unable to execute QEMU: $QemuPath" }
 
 $arguments = @(
     '-machine', 'virt',
+    '-accel', 'tcg',
     '-cpu', 'max',
     '-smp', '4',
     '-m', '4096',
@@ -66,6 +72,9 @@ $arguments = @(
     '-D', (Join-Path $evidenceDir 'qemu.log'),
     '-d', 'guest_errors'
 )
+. (Join-Path $PSScriptRoot 'Assert-QemuLaunch.ps1')
+Assert-WinMintQemuLaunch -Argument $arguments
+
 $startInfo = [Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $QemuPath
 $startInfo.UseShellExecute = $false
@@ -82,36 +91,104 @@ if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
 }
 $stopwatch.Stop()
 
-$mounted = $null
-$assigned = $null
+function Invoke-ProbeDiskpart {
+    param([Parameter(Mandatory)] [string[]] $Lines)
+    $scriptPath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-probe-' + [guid]::NewGuid().ToString('N') + '.txt')
+    [IO.File]::WriteAllLines($scriptPath, $Lines, [Text.Encoding]::ASCII)
+    try {
+        $output = & "$env:SystemRoot\System32\diskpart.exe" /s $scriptPath
+        $exit = $LASTEXITCODE
+    }
+    finally {
+        Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
+    }
+    $text = $output -join "`n"
+    if ($exit -ne 0 -or $text -match 'DiskPart has encountered an error') {
+        throw "diskpart failed (${exit}): $text"
+    }
+}
+
+function Resolve-ProbeDiskNumber {
+    param([Parameter(Mandatory)] [string] $ImagePath)
+    $imageFull = [IO.Path]::GetFullPath($ImagePath)
+    $deadline = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        foreach ($disk in @(Get-Disk -ErrorAction Stop)) {
+            $location = [string] $disk.Location
+            if ([string]::IsNullOrWhiteSpace($location)) { continue }
+            if ($location.StartsWith('\\?\')) { $location = $location.Substring(4) }
+            try {
+                $locationFull = [IO.Path]::GetFullPath($location)
+            }
+            catch {
+                continue
+            }
+            if ($locationFull.Equals($imageFull, [StringComparison]::OrdinalIgnoreCase)) {
+                return [int] $disk.Number
+            }
+        }
+        Start-Sleep -Milliseconds 250
+    } while ($deadline.Elapsed.TotalSeconds -lt 15)
+    throw 'Mounted probe VHD has no disk number'
+}
+
+function Get-ProbeVolumeRoot {
+    param(
+        [Parameter(Mandatory)] [int] $DiskNumber,
+        [Parameter(Mandatory)] [int] $PartitionNumber
+    )
+    $current = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $PartitionNumber -ErrorAction Stop
+    foreach ($accessPath in @($current.AccessPaths)) {
+        if ([string] $accessPath -match '^(?<prefix>\\\\\?\\Volume\{[0-9a-fA-F-]+\})\\?$') {
+            return $Matches.prefix + '\'
+        }
+    }
+    throw "USB partition $PartitionNumber has no volume path"
+}
+
+$attached = $false
 $probe = $null
 try {
-    $mounted = Mount-VHD -Path $image -Passthru -ErrorAction Stop
-    $diskNumber = [int] $mounted.DiskNumber
+    Invoke-ProbeDiskpart @(
+        "select vdisk file=`"$image`"",
+        'attach vdisk readonly'
+    )
+    $attached = $true
+    $diskNumber = Resolve-ProbeDiskNumber -ImagePath $image
+    $probeDisk = Get-Disk -Number $diskNumber -ErrorAction Stop
+    if ($probeDisk.IsBoot -or $probeDisk.IsSystem) {
+        throw "Refusing to read boot/system disk $diskNumber"
+    }
+    Set-Disk -Number $diskNumber -IsOffline $false -ErrorAction Stop
     $payload = Get-Partition -DiskNumber $diskNumber | Where-Object {
         $volume = $_ | Get-Volume -ErrorAction SilentlyContinue
         $null -ne $volume -and [string] $volume.FileSystem -ceq 'NTFS'
     } | Select-Object -First 1
     if ($null -eq $payload) { throw 'QEMU probe image has no NTFS payload partition' }
-    if ([string]::IsNullOrWhiteSpace([string] $payload.DriveLetter)) {
-        $payload | Add-PartitionAccessPath -AssignDriveLetter -ErrorAction Stop
-        $assigned = Get-Partition -DiskNumber $diskNumber -PartitionNumber $payload.PartitionNumber
-        $payloadRoot = "$($assigned.DriveLetter):\"
+    $payloadRoot = Get-ProbeVolumeRoot -DiskNumber $diskNumber -PartitionNumber $payload.PartitionNumber
+    $current = Get-Partition -DiskNumber $diskNumber -PartitionNumber $payload.PartitionNumber
+    foreach ($accessPath in @($current.AccessPaths)) {
+        if ([string] $accessPath -notmatch '^[A-Za-z]:') { continue }
+        Remove-PartitionAccessPath -DiskNumber $diskNumber -PartitionNumber $payload.PartitionNumber `
+            -AccessPath ([string] $accessPath) -ErrorAction SilentlyContinue
     }
-    else {
-        $payloadRoot = "$($payload.DriveLetter):\"
-    }
-    $probePath = Join-Path $payloadRoot 'winmint-boot-probe.json'
-    if (Test-Path -LiteralPath $probePath -PathType Leaf) {
+    $probePath = $payloadRoot + 'winmint-boot-probe.json'
+    if ([IO.File]::Exists($probePath)) {
         $probe = Get-Content -LiteralPath $probePath -Raw -Encoding ascii | ConvertFrom-Json
     }
 }
 finally {
-    if ($null -ne $assigned) {
-        Remove-PartitionAccessPath -DiskNumber $diskNumber `
-            -PartitionNumber $assigned.PartitionNumber -AccessPath $payloadRoot -ErrorAction SilentlyContinue
+    if ($attached) {
+        try {
+            Invoke-ProbeDiskpart @(
+                "select vdisk file=`"$image`"",
+                'detach vdisk'
+            )
+        }
+        catch {
+            Write-Warning $_.Exception.Message
+        }
     }
-    if ($null -ne $mounted) { Dismount-VHD -Path $image -ErrorAction SilentlyContinue }
 }
 
 $passed = $null -ne $probe `

@@ -15,7 +15,7 @@ set INSTALL=
 for /L %%i in (1,1,10) do (
   if not defined INSTALL (
     for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
-      if exist %%d:\sources\install.wim set INSTALL=%%d
+      if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set INSTALL=%%d
     )
     if not defined INSTALL (
       mountvol /e >nul 2>&1

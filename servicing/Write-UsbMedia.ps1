@@ -98,12 +98,49 @@ function Resolve-WinMintUsbEntryPath {
     if ($parts.Count -eq 0 -or @($parts | Where-Object { $_ -in @('', '.', '..') }).Count -gt 0) {
         throw "USB receipt path is not normalized: $RelativePath"
     }
+    $relative = $parts -join [IO.Path]::DirectorySeparatorChar
+    # Volume paths stay literal. GetFullPath rewrites \\?\ and the escape check then rejects a real child.
+    if ($Root -match '^(?<prefix>\\\\\?\\Volume\{[0-9a-fA-F-]+\})\\?$') {
+        return $Matches.prefix + [IO.Path]::DirectorySeparatorChar + $relative
+    }
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-    $full = [IO.Path]::GetFullPath((Join-Path $rootFull ($parts -join [IO.Path]::DirectorySeparatorChar)))
+    $full = [IO.Path]::GetFullPath((Join-Path $rootFull $relative))
     if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
         throw "USB receipt path escapes root: $RelativePath"
     }
     return $full
+}
+
+function Get-WinMintUsbVolumeRoot {
+    param(
+        [Parameter(Mandatory)] [int] $DiskNumber,
+        [Parameter(Mandatory)] [int] $PartitionNumber
+    )
+    $current = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $PartitionNumber -ErrorAction Stop
+    foreach ($path in @($current.AccessPaths)) {
+        if ([string] $path -match '^(?<prefix>\\\\\?\\Volume\{[0-9a-fA-F-]+\})\\?$') {
+            return $Matches.prefix + '\'
+        }
+    }
+    throw "USB partition $PartitionNumber has no volume path"
+}
+
+function Remove-WinMintUsbDriveLetter {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] [int] $DiskNumber,
+        $Partition
+    )
+    if ($null -eq $Partition) { return }
+    $number = [int] $Partition.PartitionNumber
+    $current = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $number -ErrorAction SilentlyContinue
+    if ($null -eq $current) { return }
+    foreach ($path in @($current.AccessPaths)) {
+        if ([string] $path -notmatch '^[A-Za-z]:') { continue }
+        if (-not $PSCmdlet.ShouldProcess([string] $path, 'Remove USB drive letter')) { continue }
+        Remove-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $number `
+            -AccessPath ([string] $path) -ErrorAction SilentlyContinue
+    }
 }
 
 function Read-WinMintUsbReceipt {
@@ -111,22 +148,13 @@ function Read-WinMintUsbReceipt {
 
     $receiptPath = Join-Path $WorkDirectory 'usb-media.json'
     $digestPath = Join-Path $WorkDirectory 'logs\digests.json'
-    $evidencePath = Join-Path $WorkDirectory 'evidence.json'
     if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { throw "USB receipt missing: $receiptPath" }
     if (-not (Test-Path -LiteralPath $digestPath -PathType Leaf)) { throw "Digest map missing: $digestPath" }
-    if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
-        throw "Successful Apply evidence missing: $evidencePath"
-    }
 
     $receiptSha = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $digests = Get-Content -LiteralPath $digestPath -Raw -Encoding utf8 | ConvertFrom-Json
     if ([string] $digests.'usbMedia.sha256' -cne $receiptSha) {
         throw 'usbMedia.sha256 does not match usb-media.json'
-    }
-    $evidence = Get-Content -LiteralPath $evidencePath -Raw -Encoding utf8 | ConvertFrom-Json
-    if ([string] $evidence.schemaVersion -cne 'winmint.image.evidence/v1' `
-        -or [string] $evidence.digests.'usbMedia.sha256' -cne $receiptSha) {
-        throw 'Successful Apply evidence does not bind usb-media.json'
     }
     $receipt = Get-Content -LiteralPath $receiptPath -Raw -Encoding utf8 | ConvertFrom-Json
     if ([string] $receipt.schemaVersion -cne 'winmint.usb-media/v1') {
@@ -206,6 +234,75 @@ function Test-WinMintUsbReceiptContent {
     }
 }
 
+function Write-WinMintUsbPartitionContent {
+    param(
+        [Parameter(Mandatory)] [int] $DiskNumber,
+        [Parameter(Mandatory)] [string] $MediaDir,
+        [Parameter(Mandatory)] $Receipt,
+        [scriptblock] $BeforeVerify
+    )
+
+    $bootPartition = $null
+    $payloadPartition = $null
+    try {
+        Initialize-Disk -Number $DiskNumber -PartitionStyle GPT -ErrorAction Stop | Out-Null
+        $bootPartition = New-Partition -DiskNumber $DiskNumber `
+            -Size ([long] $Receipt.Document.layout.boot.partitionBytes) `
+            -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -ErrorAction Stop
+        $payloadPartition = New-Partition -DiskNumber $DiskNumber -UseMaximumSize `
+            -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -ErrorAction Stop
+        foreach ($partition in @($bootPartition, $payloadPartition)) {
+            Set-Partition -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber `
+                -NoDefaultDriveLetter $true -ErrorAction Stop
+        }
+        $bootPartition | Format-Volume -FileSystem FAT32 -NewFileSystemLabel 'WINMINT_BOOT' `
+            -Force -Confirm:$false -ErrorAction Stop | Out-Null
+        $payloadPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'WINMINT' `
+            -Force -Confirm:$false -ErrorAction Stop | Out-Null
+        foreach ($partition in @($bootPartition, $payloadPartition)) {
+            $current = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber
+            $letterPath = @($current.AccessPaths) | Where-Object { [string] $_ -match '^[A-Za-z]:' } | Select-Object -First 1
+            if ($null -ne $letterPath) {
+                throw "USB partition $($partition.PartitionNumber) has drive letter $letterPath"
+            }
+        }
+
+        $bootRoot = Get-WinMintUsbVolumeRoot -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber
+        $payloadRoot = Get-WinMintUsbVolumeRoot -DiskNumber $DiskNumber -PartitionNumber $payloadPartition.PartitionNumber
+        Copy-WinMintUsbReceiptContent -MediaDir $MediaDir -BootRoot $bootRoot `
+            -PayloadRoot $payloadRoot -Receipt $Receipt
+        Copy-Item -LiteralPath $Receipt.Path -Destination (Join-Path $payloadRoot 'usb-media.json') -Force
+        if ($null -ne $BeforeVerify) {
+            & $BeforeVerify $payloadRoot
+        }
+        Test-WinMintUsbReceiptContent -BootRoot $bootRoot -PayloadRoot $payloadRoot -Receipt $Receipt
+
+        $bootVolume = $bootPartition | Get-Volume
+        $payloadVolume = $payloadPartition | Get-Volume
+        if ([string] $bootVolume.FileSystem -cne 'FAT32' -or [string] $payloadVolume.FileSystem -cne 'NTFS') {
+            throw 'USB target filesystems do not match the receipt'
+        }
+        Set-Partition -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber `
+            -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -ErrorAction Stop
+        $bootPartition = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber
+        $diskAfter = Get-Disk -Number $DiskNumber
+        if ([string] $diskAfter.PartitionStyle -cne 'GPT' `
+            -or [guid] $bootPartition.GptType -ne [guid] 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b') {
+            throw 'USB target is not GPT with an EFI System Partition after write'
+        }
+
+        return [pscustomobject]@{
+            BootPartition = $bootPartition
+            PayloadPartition = $payloadPartition
+        }
+    }
+    finally {
+        foreach ($partition in @($bootPartition, $payloadPartition)) {
+            Remove-WinMintUsbDriveLetter -DiskNumber $DiskNumber -Partition $partition
+        }
+    }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
     Assert-WinMintUsbAdministrator
     $receipt = Read-WinMintUsbReceipt -WorkDirectory $WorkDirectory
@@ -239,42 +336,9 @@ if ($MyInvocation.InvocationName -ne '.') {
     Remove-Item -LiteralPath $verificationPath -Force -ErrorAction SilentlyContinue
     try {
         Clear-Disk -InputObject $fresh.Disk -RemoveData -RemoveOEM -Confirm:$false -ErrorAction Stop
-        Initialize-Disk -Number $DiskNumber -PartitionStyle GPT -ErrorAction Stop | Out-Null
-        $bootPartition = New-Partition -DiskNumber $DiskNumber `
-            -Size ([long] $receipt.Document.layout.boot.partitionBytes) `
-            -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter -ErrorAction Stop
-        $payloadPartition = New-Partition -DiskNumber $DiskNumber -UseMaximumSize `
-            -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -AssignDriveLetter -ErrorAction Stop
-        $bootPartition | Format-Volume -FileSystem FAT32 -NewFileSystemLabel 'WINMINT_BOOT' `
-            -Force -Confirm:$false -ErrorAction Stop | Out-Null
-        $payloadPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'WINMINT' `
-            -Force -Confirm:$false -ErrorAction Stop | Out-Null
-
-        $bootPartition = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber
-        $payloadPartition = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $payloadPartition.PartitionNumber
-        $bootRoot = "$($bootPartition.DriveLetter):\"
-        $payloadRoot = "$($payloadPartition.DriveLetter):\"
-        Copy-WinMintUsbReceiptContent -MediaDir $mediaDir -BootRoot $bootRoot `
-            -PayloadRoot $payloadRoot -Receipt $receipt
-        Copy-Item -LiteralPath $receipt.Path -Destination (Join-Path $payloadRoot 'usb-media.json') -Force
-        Test-WinMintUsbReceiptContent -BootRoot $bootRoot -PayloadRoot $payloadRoot -Receipt $receipt
-
-        $bootVolume = $bootPartition | Get-Volume
-        $payloadVolume = $payloadPartition | Get-Volume
-        if ([string] $bootVolume.FileSystem -cne 'FAT32' -or [string] $payloadVolume.FileSystem -cne 'NTFS') {
-            throw 'USB target filesystems do not match the receipt'
-        }
-        Remove-PartitionAccessPath -DiskNumber $DiskNumber `
-            -PartitionNumber $bootPartition.PartitionNumber `
-            -AccessPath $bootRoot -ErrorAction Stop
-        Set-Partition -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber `
-            -GptType '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' -ErrorAction Stop
-        $bootPartition = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $bootPartition.PartitionNumber
-        $diskAfter = Get-Disk -Number $DiskNumber
-        if ([string] $diskAfter.PartitionStyle -cne 'GPT' `
-            -or [guid] $bootPartition.GptType -ne [guid] 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b') {
-            throw 'USB target is not GPT with an EFI System Partition after write'
-        }
+        $laidOut = Write-WinMintUsbPartitionContent -DiskNumber $DiskNumber -MediaDir $mediaDir -Receipt $receipt
+        $bootPartition = $laidOut.BootPartition
+        $payloadPartition = $laidOut.PayloadPartition
 
         $verification = [ordered]@{
             schemaVersion = 'winmint.usb-write-verification/v1'
@@ -298,11 +362,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     }
     finally {
         foreach ($partition in @($bootPartition, $payloadPartition)) {
-            if ($null -ne $partition -and -not [string]::IsNullOrWhiteSpace([string] $partition.DriveLetter)) {
-                Remove-PartitionAccessPath -DiskNumber $DiskNumber `
-                    -PartitionNumber $partition.PartitionNumber `
-                    -AccessPath "$($partition.DriveLetter):\" -ErrorAction SilentlyContinue
-            }
+            Remove-WinMintUsbDriveLetter -DiskNumber $DiskNumber -Partition $partition
         }
     }
     exit 0
