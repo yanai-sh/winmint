@@ -227,6 +227,7 @@ function Resolve-KernelScript {
         'InjectDrivers' { return Join-Path $scriptRoot 'Inject-SurfaceDrivers.ps1' }
         'AddQualityUpdates' { return Join-Path $scriptRoot 'Add-QualityUpdates.ps1' }
         'ExportWim' { return Join-Path $scriptRoot 'Export-Wim.ps1' }
+        'PublishUsbMedia' { return Join-Path $scriptRoot 'Publish-UsbMedia.ps1' }
         'BuildIso' { return Join-Path $scriptRoot 'Build-Iso.ps1' }
         default { throw "Unknown opcode: $Opcode" }
     }

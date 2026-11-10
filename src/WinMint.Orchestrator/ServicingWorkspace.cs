@@ -22,6 +22,7 @@ public sealed class ServicingWorkspace
     public const string UnattendFileName = "unattend.xml";
     public const string DigestsFileName = "digests.json";
     public const string PreparedMediaFileName = "prepared-media.json";
+    public const string UsbMediaReceiptFileName = "usb-media.json";
     public const string IncomingMediaPrefix = "media.incoming-";
     public const string PreviousMediaPrefix = "media.previous-";
     public const string PoliciesFileName = "policies.json";
@@ -52,6 +53,7 @@ public sealed class ServicingWorkspace
         Unattend = Path.Combine(Root, UnattendFileName);
         Digests = Path.Combine(Logs, DigestsFileName);
         PreparedMedia = Path.Combine(Root, PreparedMediaFileName);
+        UsbMediaReceipt = Path.Combine(Root, UsbMediaReceiptFileName);
         QualityPackages = Path.Combine(Root, QualityPackagesDirectoryName);
     }
 
@@ -71,6 +73,7 @@ public sealed class ServicingWorkspace
     public string Unattend { get; }
     public string Digests { get; }
     public string PreparedMedia { get; }
+    public string UsbMediaReceipt { get; }
     public string QualityPackages { get; }
 
     public static string HostPreparedMediaRoot => PreparedMediaIdentity.Root;
@@ -93,6 +96,7 @@ public sealed class ServicingWorkspace
             ["unattend"] = Unattend,
             ["digests"] = Digests,
             ["preparedMedia"] = PreparedMedia,
+            ["usbMediaReceipt"] = UsbMediaReceipt,
             ["qualityPackages"] = QualityPackages,
             ["incomingMediaPrefix"] = IncomingMediaPrefix,
             ["previousMediaPrefix"] = PreviousMediaPrefix,

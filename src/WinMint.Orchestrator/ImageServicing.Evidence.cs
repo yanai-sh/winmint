@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -81,6 +82,26 @@ public static partial class ImageServicing
                 new Failure(
                     "servicing.evidence.digests.outputIso",
                     "logs/digests.json missing outputIso.sha256."));
+        }
+
+        if (!stages.Any(static s => s.Opcode == ServicingOpcode.PublishUsbMedia)
+            || !File.Exists(workspace.UsbMediaReceipt))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.usbMedia.missing",
+                    "PublishUsbMedia stage or usb-media.json missing."));
+        }
+
+        string receiptSha = Convert.ToHexString(
+            SHA256.HashData(File.ReadAllBytes(workspace.UsbMediaReceipt))).ToLowerInvariant();
+        if (!digests.TryGetValue("usbMedia.sha256", out string? recordedReceiptSha)
+            || !string.Equals(receiptSha, recordedReceiptSha, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Fail<ImageEvidence, Failure>(
+                new Failure(
+                    "servicing.evidence.digests.usbMedia",
+                    "logs/digests.json usbMedia.sha256 missing or does not match usb-media.json."));
         }
 
         JsonObject doc = new()
@@ -208,7 +229,7 @@ public static partial class ImageServicing
         bool expectFu = plan.Manifest.ImageQuality == ImageQualityLane.Release;
         IReadOnlyList<OfflinePolicyRow> rows = plan.OfflinePolicies;
         Dictionary<string, string> requiredValues = new(StringComparer.Ordinal);
-        List<string> requiredKeys = ["outputIso.sha256"];
+        List<string> requiredKeys = ["outputIso.sha256", "usbMedia.sha256"];
         foreach (OfflinePolicyRow row in rows)
         {
             requiredKeys.Add(row.Digest);
@@ -288,6 +309,7 @@ internal sealed record FailureFile(
 [JsonSerializable(typeof(DisableOptionalFeaturesParameters))]
 [JsonSerializable(typeof(InjectDriversParameters))]
 [JsonSerializable(typeof(ExportWimParameters))]
+[JsonSerializable(typeof(PublishUsbMediaParameters))]
 [JsonSerializable(typeof(BuildIsoParameters))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class ServicingJsonContext : JsonSerializerContext;

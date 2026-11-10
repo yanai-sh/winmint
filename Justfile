@@ -1,6 +1,6 @@
 # WinMint v2 — host tasks (winget install Casey.Just)
 
-set windows-shell := ["pwsh.exe", "-NoProfile", "-Command"]
+set windows-shell := ["pwsh.exe", "-NoProfile", "-NonInteractive", "-Command"]
 
 default:
     @just --list
@@ -33,6 +33,35 @@ format-check:
 
 check:
     pwsh -NoProfile -File '{{justfile_directory()}}/tools/host/Invoke-CheckGate.ps1'
+
+# Elevated pwsh only. First command prints the disk-bound token without changing the disk.
+usb-write-preflight WORK DISK:
+    pwsh -NoProfile -File '{{justfile_directory()}}/servicing/Write-UsbMedia.ps1' -WorkDirectory '{{WORK}}' -DiskNumber {{DISK}} -WhatIf
+
+# Elevated pwsh only. TOKEN must be copied from usb-write-preflight for the same unchanged disk.
+usb-write WORK DISK TOKEN:
+    pwsh -NoProfile -File '{{justfile_directory()}}/servicing/Write-UsbMedia.ps1' -WorkDirectory '{{WORK}}' -DiskNumber {{DISK}} -DestructiveToken '{{TOKEN}}'
+
+# Full offline media check: receipt/source hashes, WIM decompression, WinPE apply defects, PCA2023 EFI signatures, and BCD.
+usb-static-verify WORK WIMLIB:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/usb/Test-UsbMediaArtifact.ps1' -WorkDirectory '{{WORK}}' -WimlibImagexPath '{{WIMLIB}}'
+
+# Elevated Windows. VHDX via diskpart is the QEMU test artifact; optional RAW is for PiKVM.
+usb-test-image WORK IMAGE RAW="" QEMU_IMG="qemu-img":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/usb/New-UsbMediaTestImage.ps1' -WorkDirectory '{{WORK}}' -ImagePath '{{IMAGE}}' -RawImagePath '{{RAW}}' -QemuImgPath '{{QEMU_IMG}}'
+
+# Elevated Windows. Disposable VHD via diskpart; reads the live EFI system partition type. Not in `just check`.
+usb-partition-prove:
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/usb/Test-UsbPartitionRecipe.ps1'
+
+# AAVMF variables must have Secure Boot enabled with the applicable Microsoft keys enrolled.
+usb-qemu-probe IMAGE AAVMF_CODE AAVMF_VARS QEMU="qemu-system-aarch64":
+    pwsh -NoProfile -File '{{justfile_directory()}}/tools/usb/Invoke-QemuUsbBootProbe.ps1' -ImagePath '{{IMAGE}}' -FirmwareCodePath '{{AAVMF_CODE}}' -SecureBootVarsTemplatePath '{{AAVMF_VARS}}' -QemuPath '{{QEMU}}'
+
+# PiKVM KVMD >= 4.49. SL7 power is manual; credentials never appear in argv.
+# Nested interactive pwsh: windows-shell is -NonInteractive so other recipes do not wait on Enter.
+usb-pikvm-probe BASE_URI RAW MANIFEST:
+    pwsh -NoProfile -Command '$credential = Get-Credential -Message ''PiKVM credentials''; & ''{{justfile_directory()}}/tools/usb/Invoke-PiKvmUsbBootProbe.ps1'' -BaseUri ''{{BASE_URI}}'' -Credential $credential -RawImagePath ''{{RAW}}'' -ImageManifestPath ''{{MANIFEST}}'' -ManualPower'
 
 # Discover tests/contract/Test-*.ps1 (WinPE / DISM / release helpers that cannot run on a live host).
 contract-tests:

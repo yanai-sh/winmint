@@ -101,4 +101,11 @@ public sealed record ExportWimParameters(
     string Compression,
     string Cleanup);
 
+public sealed record PublishUsbMediaParameters(
+    string MediaDir,
+    string WorkDirectory,
+    string UsbMediaReceiptPath,
+    string SourceIsoSha256,
+    int WimIndex);
+
 public sealed record BuildIsoParameters(string OutputIso, string MediaDir);

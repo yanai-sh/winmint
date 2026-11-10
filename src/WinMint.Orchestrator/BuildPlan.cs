@@ -563,6 +563,7 @@ public static partial class BuildPlan
 
         stages.Add(ServicingOpcode.PatchBootWimApply);
         stages.Add(ServicingOpcode.ExportWim);
+        stages.Add(ServicingOpcode.PublishUsbMedia);
         stages.Add(ServicingOpcode.BuildIso);
 
         BuildArtifacts artifacts = new(

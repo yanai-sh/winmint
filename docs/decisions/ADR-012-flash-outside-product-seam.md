@@ -1,6 +1,6 @@
 # ADR-012: Flash is outside the product seam
 
-**Status:** Accepted · **Date:** 2026-08-12
+**Status:** Superseded by [ADR-019](ADR-019-product-owned-usb-media.md) · **Date:** 2026-08-12
 
 ### Context
 
@@ -17,3 +17,5 @@ The deliverable is the **Output ISO** + digests. **Flash** is operator hygiene: 
 ### Review trigger
 
 Documented wipe failure from wrong flash mode, or a deliberate product shift to “Profile → stick in one host app.”
+
+The trigger fired during the 2026-10 bare-metal investigation: raw-written optical media booted without a usable payload, while ISO-mode remastering changed the boot path. ADR-019 owns the replacement decision.

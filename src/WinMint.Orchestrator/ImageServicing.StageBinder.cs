@@ -197,6 +197,17 @@ public static partial class ImageServicing
                             exportLane.Cleanup),
                         ServicingJsonContext.Default.ExportWimParameters);
                     break;
+                case ServicingOpcode.PublishUsbMedia:
+                    Add(
+                        opcode,
+                        new PublishUsbMediaParameters(
+                            mediaDir,
+                            workspace.Root,
+                            workspace.UsbMediaReceipt,
+                            identity.SourceIsoSha256,
+                            wimIndex),
+                        ServicingJsonContext.Default.PublishUsbMediaParameters);
+                    break;
                 case ServicingOpcode.BuildIso:
                     Add(
                         opcode,

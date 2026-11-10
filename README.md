@@ -26,7 +26,7 @@ Registry scripts are the files in `post-install/registry/`. OneDrive, the inbox 
 
 The Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it.
 
-The goal is a portable ISO that installs cleanly, with the curated settings still to come. The compiler stays in the tree for that goal. Its current output is unstable install media.
+The metal goal is product-owned USB media that installs cleanly, with the curated settings still to come. The ISO compiler stays for Hyper-V/DVD acceptance. Its current output is unstable install media.
 
 A build still takes an official **English (US)** Windows 11 **26H2** ARM64 ISO (family 26300) from [Microsoft’s ARM64 download](https://www.microsoft.com/en-us/software-download/windows11arm64) (English, not English International). A 25H2 ISO (family 26200) still services. WinMint does not download or redistribute Windows.
 

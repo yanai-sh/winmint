@@ -19,6 +19,45 @@ function Copy-WinMintMediaBootFile {
     Copy-Item -LiteralPath $Source -Destination $Destination -Force
 }
 
+function Copy-WinMintWinPeDesktop {
+    param(
+        [Parameter(Mandatory)] [string] $Source,
+        [Parameter(Mandatory)] [string] $Destination
+    )
+    if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "winpe.jpg missing: $Source" }
+
+    # boot.wim index 2 keeps the inbox wallpaper after the LCU. Owner is TrustedInstaller
+    # and the DACL grants Administrators read/execute only (not read-only, not a share lock).
+    # Clearing IsReadOnly cannot overwrite it. Grant Administrators on this file only.
+    try {
+        $existing = Get-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+        if ($null -ne $existing -and $existing.IsReadOnly) { $existing.IsReadOnly = $false }
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force
+        return
+    }
+    catch {
+        $ex = $_.Exception
+        $denied = $false
+        while ($null -ne $ex) {
+            if ($ex -is [UnauthorizedAccessException] -or $ex.Message -match 'Access to the path') {
+                $denied = $true
+                break
+            }
+            $ex = $ex.InnerException
+        }
+        if (-not $denied -or -not (Test-Path -LiteralPath $Destination -PathType Leaf)) { throw }
+    }
+
+    & takeown.exe /F $Destination /A | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "takeown failed: $Destination exit $LASTEXITCODE" }
+    # Administrators (BA) — S-1-5-32-544
+    & icacls.exe $Destination /grant '*S-1-5-32-544:F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "icacls grant failed: $Destination exit $LASTEXITCODE" }
+    $existing = Get-Item -LiteralPath $Destination -Force
+    if ($existing.IsReadOnly) { $existing.IsReadOnly = $false }
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+}
+
 function Publish-WinMintMediaBootFile {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -39,6 +78,15 @@ function Publish-WinMintMediaBootFile {
         New-Item -ItemType Directory -Force -Path $stlDir | Out-Null
         Copy-WinMintMediaBootFile -Source $BootStl -Destination (Join-Path $stlDir 'boot.stl')
     }
+    # ARM64 Source ISO has efi\boot\bootaa64.efi and no efi\microsoft\boot\bootmgfw.efi.
+    # Replacing only names already on disk never creates the path USB publish requires.
+    if ($haveMgfw) {
+        $mgfwDir = Join-Path $MediaDir 'efi\microsoft\boot'
+        $aa64Dir = Join-Path $MediaDir 'efi\boot'
+        New-Item -ItemType Directory -Force -Path @($mgfwDir, $aa64Dir) | Out-Null
+        Copy-WinMintMediaBootFile -Source $BootMgfw -Destination (Join-Path $mgfwDir 'bootmgfw.efi')
+        Copy-WinMintMediaBootFile -Source $BootMgfw -Destination (Join-Path $aa64Dir 'bootaa64.efi')
+    }
     if (-not $haveMgfw -and -not $haveMgr) { return }
     $efiFiles = @(Get-ChildItem -LiteralPath $MediaDir -Force -Recurse -File -Filter 'b*.efi' -ErrorAction SilentlyContinue)
     foreach ($file in $efiFiles) {
@@ -49,6 +97,109 @@ function Publish-WinMintMediaBootFile {
             Copy-WinMintMediaBootFile -Source $BootMgr -Destination $file.FullName
         }
     }
+}
+
+function Test-WinMintPeImage {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $buf = [byte[]]::new(2)
+        $read = $stream.Read($buf, 0, 2)
+        return $read -eq 2 -and $buf[0] -eq 0x4D -and $buf[1] -eq 0x5A
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Test-WinMintBootManagerCa2023 {
+    <#
+    .SYNOPSIS
+      A Valid Authenticode signer is current when it is Windows UEFI CA 2023 or a
+      Windows Production PCA from 2023 on. Production PCA 2011 stays rejected.
+      26H2 bootmgfw is issued by Microsoft Windows Production PCA 2026.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        $Signature
+    )
+    if ($Signature.Status -ne [Management.Automation.SignatureStatus]::Valid) { return $false }
+    $cert = $Signature.SignerCertificate
+    $blob = if ($null -eq $cert) { '' } else { "$($cert.Subject)`n$($cert.Issuer)" }
+    if ($blob -match 'PCA 2011') { return $false }
+    return $blob -match 'Windows UEFI CA 2023' -or $blob -match 'Production PCA 20(2[3-9]|[3-9]\d)'
+}
+
+function Assert-WinMintBootManagerCa2023 {
+    <#
+    .SYNOPSIS
+      A real PE boot manager must chain to Windows UEFI CA 2023 or a later Windows Production PCA.
+      Non-PE fixtures (contract tests) are ignored so the copy function stays byte-oriented.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+    if (-not (Test-WinMintPeImage -Path $Path)) { return }
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    if (-not (Test-WinMintBootManagerCa2023 -Signature $signature)) {
+        throw "bootmgfw.efi is not signed through Windows UEFI CA 2023: $Path ($($signature.Status))"
+    }
+}
+
+function Clear-WinMintBootEfiStage {
+    param(
+        [Parameter(Mandatory)]
+        [string] $StageDir
+    )
+    foreach ($leaf in @('boot.stl', 'bootmgfw.efi', 'bootmgr.efi')) {
+        $staged = Join-Path $StageDir $leaf
+        if (Test-Path -LiteralPath $staged) {
+            Remove-Item -LiteralPath $staged -Force
+        }
+    }
+}
+
+function Copy-WinMintBootEfiStage {
+    param(
+        [Parameter(Mandatory)]
+        [string] $MountDir,
+        [Parameter(Mandatory)]
+        [string] $StageDir
+    )
+    $efiDir = Join-Path $MountDir 'Windows\Boot\EFI'
+    foreach ($leaf in @('boot.stl', 'bootmgfw.efi', 'bootmgr.efi')) {
+        $src = Join-Path $efiDir $leaf
+        if (Test-Path -LiteralPath $src -PathType Leaf) {
+            New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
+            Copy-Item -LiteralPath $src -Destination (Join-Path $StageDir $leaf) -Force
+        }
+    }
+}
+
+function Publish-WinMintStagedBootSet {
+    param(
+        [Parameter(Mandatory)]
+        [string] $MediaDir,
+        [Parameter(Mandatory)]
+        [string] $StageDir
+    )
+    $stl = Join-Path $StageDir 'boot.stl'
+    $mgfw = Join-Path $StageDir 'bootmgfw.efi'
+    $mgr = Join-Path $StageDir 'bootmgr.efi'
+    if (-not (Test-Path -LiteralPath $stl -PathType Leaf)) {
+        throw 'Serviced boot.wim is missing Windows\Boot\EFI\boot.stl; Secure Boot media needs efi\microsoft\boot\boot.stl'
+    }
+    if (-not (Test-Path -LiteralPath $mgfw -PathType Leaf)) {
+        throw 'Serviced boot.wim is missing Windows\Boot\EFI\bootmgfw.efi'
+    }
+    Assert-WinMintBootManagerCa2023 -Path $mgfw
+    $mgrArg = ''
+    if (Test-Path -LiteralPath $mgr -PathType Leaf) { $mgrArg = $mgr }
+    Publish-WinMintMediaBootFile -MediaDir $MediaDir -BootStl $stl -BootMgfw $mgfw -BootMgr $mgrArg
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
@@ -114,6 +265,50 @@ function Test-LaunchApplyPatched {
     return $clean
 }
 
+function Copy-WinMintBootWimEfiStage {
+    param(
+        [Parameter(Mandatory)] [string] $Wim,
+        [Parameter(Mandatory)] [string] $Mount,
+        [Parameter(Mandatory)] [int] $Index,
+        [Parameter(Mandatory)] [string] $StageDir,
+        [Parameter(Mandatory)] [string] $WorkDirectory
+    )
+    Write-WinMintMountOwner -Kind boot -WorkDirectory $WorkDirectory -MountDirectory $Mount -ImageFile $Wim -SourceIndex $Index | Out-Null
+    try {
+        Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$Wim", "/Index:$Index", "/MountDir:$Mount", '/ReadOnly') -Stage 'Mount-Image-ReadOnly'
+    }
+    catch {
+        try {
+            Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$Mount", '/Discard') -Stage 'Unmount-Discard'
+            Remove-WinMintMountOwner -Kind boot
+        }
+        catch {
+            Write-Debug "Mount-Image-ReadOnly cleanup after boot-file stage failure: $_"
+        }
+        throw
+    }
+    $primaryError = $null
+    try {
+        Clear-WinMintBootEfiStage -StageDir $StageDir
+        Copy-WinMintBootEfiStage -MountDir $Mount -StageDir $StageDir
+    }
+    catch {
+        $primaryError = $_
+        throw
+    }
+    finally {
+        try {
+            Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$Mount", '/Discard') -Stage 'Unmount-Discard'
+            Remove-WinMintMountOwner -Kind boot
+        }
+        catch {
+            $message = "Unmount boot.wim:$Index after boot-file stage failed: $($_.Exception.Message)"
+            if ($null -eq $primaryError) { throw $message }
+            Write-Warning "$message (preserving earlier error: $($primaryError.Exception.Message))"
+        }
+    }
+}
+
 $bootEfiStage = Join-Path $WorkDirectory 'boot-efi'
 $bootMount = Join-Path (Split-Path -Parent $mountDir) 'boot-mount'
 if (Test-Path -LiteralPath $bootMount) {
@@ -152,8 +347,11 @@ if (Test-Path -LiteralPath $bootMarker) {
             }
         }
         if ($allIndexesPatched) {
+            Copy-WinMintBootWimEfiStage -Wim $bootWim -Mount $bootMount -Index $indexes[-1] -StageDir $bootEfiStage -WorkDirectory $WorkDirectory
+            Publish-WinMintStagedBootSet -MediaDir $mediaDir -StageDir $bootEfiStage
             Remove-Item -LiteralPath $legacyMarker -Force -ErrorAction SilentlyContinue
             Write-Output 'PatchBootWimApply skipped (already patched; LaunchApply verified in every boot.wim index)'
+            Write-Output 'PatchBootWimApply copied boot.stl to efi\microsoft\boot\boot.stl'
             Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
             exit 0
         }
@@ -166,6 +364,7 @@ $bootItem = Get-Item -LiteralPath $bootWim
 if ($bootItem.IsReadOnly) { $bootItem.IsReadOnly = $false }
 
 $winpeshl = Get-WinPeApplyWinpeshlText
+Clear-WinMintBootEfiStage -StageDir $bootEfiStage
 
 foreach ($index in $indexes) {
     Write-Output "Patch boot.wim index $index (WinPE apply launcher)"
@@ -183,19 +382,8 @@ foreach ($index in $indexes) {
             -Destination (Join-Path $bootMount 'Windows\System32\WinMintApply.exe') -Force
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii
         $desktopSrc = Join-Path (Split-Path -Parent $launchApplyPayload) 'winpe.jpg'
-        if (-not (Test-Path -LiteralPath $desktopSrc -PathType Leaf)) { throw "winpe.jpg missing: $desktopSrc" }
-        $desktopDest = Join-Path $bootMount 'Windows\System32\winpe.jpg'
-        $desktopItem = Get-Item -LiteralPath $desktopDest -ErrorAction SilentlyContinue
-        if ($null -ne $desktopItem -and $desktopItem.IsReadOnly) { $desktopItem.IsReadOnly = $false }
-        Copy-Item -LiteralPath $desktopSrc -Destination $desktopDest -Force
-        $efiDir = Join-Path $bootMount 'Windows\Boot\EFI'
-        foreach ($leaf in @('boot.stl', 'bootmgfw.efi', 'bootmgr.efi')) {
-            $src = Join-Path $efiDir $leaf
-            if (Test-Path -LiteralPath $src -PathType Leaf) {
-                New-Item -ItemType Directory -Force -Path $bootEfiStage | Out-Null
-                Copy-Item -LiteralPath $src -Destination (Join-Path $bootEfiStage $leaf) -Force
-            }
-        }
+        Copy-WinMintWinPeDesktop -Source $desktopSrc -Destination (Join-Path $bootMount 'Windows\System32\winpe.jpg')
+        Copy-WinMintBootEfiStage -MountDir $bootMount -StageDir $bootEfiStage
     }
     finally {
         Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
@@ -230,20 +418,8 @@ if ((Test-Path -LiteralPath $winreSrc) -and $winrePackages.Count -gt 0) {
     Remove-Item -LiteralPath $winreTmp -Force -ErrorAction SilentlyContinue
 }
 
-if ($applyQuality) {
-    $stlStaged = Join-Path $bootEfiStage 'boot.stl'
-    if (-not (Test-Path -LiteralPath $stlStaged -PathType Leaf)) {
-        throw 'Serviced boot.wim is missing Windows\Boot\EFI\boot.stl; Secure Boot media needs efi\microsoft\boot\boot.stl'
-    }
-    $mgfwStaged = Join-Path $bootEfiStage 'bootmgfw.efi'
-    $mgrStaged = Join-Path $bootEfiStage 'bootmgr.efi'
-    $mgfwArg = ''
-    $mgrArg = ''
-    if (Test-Path -LiteralPath $mgfwStaged -PathType Leaf) { $mgfwArg = $mgfwStaged }
-    if (Test-Path -LiteralPath $mgrStaged -PathType Leaf) { $mgrArg = $mgrStaged }
-    Publish-WinMintMediaBootFile -MediaDir $mediaDir -BootStl $stlStaged -BootMgfw $mgfwArg -BootMgr $mgrArg
-    Write-Output 'PatchBootWimApply copied boot.stl to efi\microsoft\boot\boot.stl'
-}
+Publish-WinMintStagedBootSet -MediaDir $mediaDir -StageDir $bootEfiStage
+Write-Output 'PatchBootWimApply copied boot.stl to efi\microsoft\boot\boot.stl'
 
 Remove-Item -LiteralPath $bootMount -Recurse -Force -ErrorAction SilentlyContinue
 Write-Output 'PatchBootWimApply ok'

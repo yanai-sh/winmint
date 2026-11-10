@@ -27,9 +27,11 @@ $version = Convert-WinMintReleaseTag -Tag $Tag -Commit $commit
 $winmintPeAllow = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($rel in @(
         'bin\cli\WinMint.Cli.exe',
+        'bin\cli\WinMint.Cli.dll',
         'bin\cli\WinMint.Contracts.dll',
         'bin\cli\WinMint.Orchestrator.dll',
         'bin\wizard\WinMint.Wizard.exe',
+        'bin\wizard\WinMint.Wizard.dll',
         'bin\wizard\WinMint.Contracts.dll',
         'bin\wizard\WinMint.Orchestrator.dll',
         'artifacts\provisioning\WinMint.Provisioning.exe',

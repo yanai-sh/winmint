@@ -199,6 +199,7 @@ public class BuildPlanPlanTests
                 ServicingOpcode.StampOfflineShell,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
+                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages);
