@@ -247,11 +247,8 @@ function New-WinMintMediaCacheEntry {
             $isoRoot = & $mountIso $SourceIso
         }
         else {
-            $disk = Mount-DiskImage -ImagePath $SourceIso -PassThru -ErrorAction Stop
-            Start-Sleep -Seconds 2
-            $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
-            if ([string]::IsNullOrWhiteSpace($letter)) { throw 'ISO mounted but no drive letter' }
-            $isoRoot = "${letter}:"
+            $null = Mount-DiskImage -ImagePath $SourceIso -PassThru -ErrorAction Stop
+            $isoRoot = Get-WinMintMountedIsoRoot -IsoPath $SourceIso
         }
         $mounted = $true
         Copy-WinMintMediaTree -Source $isoRoot -Destination $media -Commands $Commands

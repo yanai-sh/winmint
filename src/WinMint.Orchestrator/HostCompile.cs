@@ -488,6 +488,7 @@ public static class HostCompile
             IncludeSmokeStubs = options.IncludeSmokeStubs,
             SmokePlumbing = options.SmokePlumbing,
             IncludeWslPlatform = options.IncludeWslPlatform,
+            IncludeUsbMedia = options.IncludeUsbMedia,
             PackageCatalog = options.PackageCatalog,
         };
 
@@ -587,7 +588,8 @@ public sealed record HostComposeOptions(
     int? WindowsBuild = null,
     string? ProfileName = null,
     PackageCatalog? PackageCatalog = null,
-    IReadOnlyList<string>? AuthoredSelectionLabels = null);
+    IReadOnlyList<string>? AuthoredSelectionLabels = null,
+    bool IncludeUsbMedia = false);
 
 public sealed record HostComposeError(
     string Code,

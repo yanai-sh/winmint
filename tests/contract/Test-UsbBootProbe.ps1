@@ -21,6 +21,7 @@ if ($launch.Substring($probeLabel) -notmatch 'WINMINT USB BOOT PROBE PASSED' `
 }
 
 $image = Read-RepoText 'tools/usb/New-UsbMediaTestImage.ps1'
+$layout = Read-RepoText 'servicing/UsbMediaLayout.ps1'
 $writer = Read-RepoText 'servicing/Write-UsbMedia.ps1'
 foreach ($required in @(
         "winmint-boot-probe.txt",
@@ -36,17 +37,38 @@ foreach ($forbidden in @('New-Partition', 'Format-Volume', 'Initialize-Disk', 'S
         throw "USB test-image builder must use Write-WinMintUsbPartitionContent, not its own $forbidden"
     }
 }
-$beforeVerify = $writer.IndexOf('& $BeforeVerify $payloadRoot', [StringComparison]::Ordinal)
-$verifyInRecipe = $writer.IndexOf('Test-WinMintUsbReceiptContent', $beforeVerify, [StringComparison]::Ordinal)
+$beforeVerify = $layout.IndexOf('& $BeforeVerify $payloadRoot', [StringComparison]::Ordinal)
+$verifyInRecipe = $layout.IndexOf('Test-WinMintUsbReceiptContent', $beforeVerify, [StringComparison]::Ordinal)
 if ($beforeVerify -lt 0 -or $verifyInRecipe -le $beforeVerify) {
     throw 'partition recipe must write the probe file before it verifies the receipt'
 }
+$partitionAt = $layout.IndexOf('function Write-WinMintUsbPartitionContent', [StringComparison]::Ordinal)
+foreach ($owned in @('New-Partition', 'Format-Volume')) {
+    $ownedAt = $layout.IndexOf($owned, [StringComparison]::Ordinal)
+    if ($partitionAt -lt 0 -or $ownedAt -lt $partitionAt) {
+        throw "USB layout must call $owned only from Write-WinMintUsbPartitionContent"
+    }
+    if ($writer.IndexOf($owned, [StringComparison]::Ordinal) -ge 0) {
+        throw "physical USB entry must partition through Write-WinMintUsbPartitionContent, not its own $owned"
+    }
+}
 
 $qemu = Read-RepoText 'tools/usb/Invoke-QemuUsbBootProbe.ps1'
-foreach ($required in @('qemu-system-aarch64', 'qemu-xhci', 'usb-storage', 'if=pflash', 'SecureBootVarsTemplatePath')) {
+foreach ($required in @('qemu-system-aarch64', 'qemu-xhci', 'usb-storage', 'if=pflash', 'SecureBootVarsTemplatePath', 'virt,gic-version=3')) {
     if ($qemu -notmatch [regex]::Escape($required)) { throw "QEMU USB probe is missing: $required" }
 }
-if ($qemu -match 'virtio-(blk|scsi)') { throw 'QEMU USB probe must not bypass USB mass storage with VirtIO' }
+if ($qemu -match "'-machine', 'virt'") {
+    throw 'QEMU USB probe must select GICv3; virt defaults to GICv2 and Windows ARM64 resets before WinPE'
+}
+if ($qemu -notmatch "'-m', '8192'") {
+    throw 'QEMU USB probe must give the guest 8192 MiB so winload can ramdisk boot.wim'
+}
+if ($qemu -match 'virtio-(blk|scsi|gpu)') {
+    throw 'QEMU USB probe must not bypass USB mass storage with VirtIO or replace Windows GOP with virtio-gpu'
+}
+if ($qemu -notmatch '(?m)^[^\S\r\n]*''-device'', ''ramfb'',') {
+    throw 'QEMU USB probe must provide ramfb; virt has no GOP and Windows boot resets without a linear framebuffer'
+}
 if ($qemu -notmatch 'winmint-boot-probe\.json') {
     throw 'QEMU USB probe must require evidence written by WinPE'
 }
@@ -73,7 +95,8 @@ foreach ($required in @(
         'Get-AuthenticodeSignature',
         'Windows UEFI CA 2023',
         'Test-WinMintBootManagerCa2023',
-        'bcdedit.exe',
+        '[IO.File]::ReadAllBytes($bcdPath)',
+        'winload.efi',
         'bootaa64.efi and bootmgfw.efi must be the same SHA-256',
         'efi/microsoft/boot/boot.stl',
         'boot.stl is empty',
@@ -83,10 +106,19 @@ foreach ($required in @(
 if ($static -match '@\(\s*Get-WinPeApplyDefect') {
     throw 'USB static verifier must assign Get-WinPeApplyDefect directly; @() wraps the returned string[] and -join prints System.String[]'
 }
-$guardAt = $image.IndexOf('Mounted probe VHD has no disk number', [StringComparison]::Ordinal)
+if ($static -match 'bcdedit') {
+    throw 'USB static verifier must not open the BCD store with bcdedit'
+}
+$guardAt = $image.IndexOf('Resolve-WinMintUsbAttachedDiskNumber', [StringComparison]::Ordinal)
 $layoutAt = $image.IndexOf('Write-WinMintUsbPartitionContent', [StringComparison]::Ordinal)
 if ($guardAt -lt 0 -or $layoutAt -lt 0 -or $guardAt -gt $layoutAt) {
-    throw 'USB test-image builder must refuse a missing disk number before the partition recipe'
+    throw 'USB test-image builder must resolve the attached disk before the partition recipe'
+}
+if ($layout -notmatch 'function Invoke-WinMintUsbDiskpart' -or $layout -notmatch 'Elapsed\.TotalSeconds -lt 15') {
+    throw 'USB layout must own the diskpart runner and the 15 second attached-disk poll'
+}
+if ($image -match 'function Invoke-ProbeDiskpart' -or $qemu -match 'function Invoke-ProbeDiskpart') {
+    throw 'USB probe tools must not keep a private diskpart runner'
 }
 foreach ($required in @('IsBoot', 'IsSystem', 'is not the probe VHD')) {
     if ($image.Substring(0, $layoutAt) -notmatch [regex]::Escape($required)) {
@@ -106,13 +138,11 @@ foreach ($forbidden in @(
     }
 }
 foreach ($source in @($static, $image)) {
-    $resolveAt = $source.IndexOf('Resolve-Path -LiteralPath $WorkDirectory', [StringComparison]::Ordinal)
-    $dotAt = $source.IndexOf('Write-UsbMedia.ps1', [StringComparison]::Ordinal)
-    if ($resolveAt -lt 0 -or $dotAt -lt 0 -or $resolveAt -gt $dotAt) {
-        throw 'USB tools must resolve WorkDirectory before dot-sourcing Write-UsbMedia.ps1'
+    if ($source -match 'Write-UsbMedia\.ps1') {
+        throw 'USB tools must dot-source UsbMediaLayout.ps1, not Write-UsbMedia.ps1'
     }
-    if ($source -match "Write-UsbMedia\.ps1'\) -WorkDirectory unused") {
-        throw 'USB tools must not let Write-UsbMedia.ps1 overwrite WorkDirectory with unused'
+    if ($source -notmatch 'UsbMediaLayout\.ps1') {
+        throw 'USB tools must dot-source UsbMediaLayout.ps1'
     }
 }
 

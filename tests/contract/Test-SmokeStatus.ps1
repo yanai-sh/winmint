@@ -12,6 +12,9 @@ if ($smoke -notmatch 'Get-WinMintApplyHostFailure') { throw 'Apply wait must use
 if ($smoke -notmatch 'Format-WinMintServicingLockFailure') { throw 'Apply catch must rewrite servicing already active' }
 if ($smoke -notmatch "Resolve-SmokePhase -HostStage failed") { throw 'Apply/wait failures must write phase=failed' }
 if ($smoke -match 'Get-Content[^\n]*smoke-status\.json') { throw 'must not read smoke-status.json as control plane' }
+$liveFn = [regex]::Match($smoke, '(?ms)function Test-ScratchWorkDirLiveHeavy \{.*?^\}').Value
+if ([string]::IsNullOrWhiteSpace($liveFn)) { throw 'Test-ScratchWorkDirLiveHeavy missing' }
+if ($liveFn -match 'smoke-status|waiterPid|Get-Content') { throw 'scratch liveness must not read smoke-status.json' }
 if ($smoke -notmatch 'Get-SmokeWaitTick') { throw 'Invoke-Smoke wait loop must call Get-SmokeWaitTick' }
 $statusFacade = Get-Content -LiteralPath (Join-Path $repo 'tools/vm/SmokeStatus.ps1') -Raw -Encoding utf8
 if ($statusFacade -notmatch 'SmokeConverge\.ps1') { throw 'SmokeStatus facade must load SmokeConverge.ps1' }
@@ -142,9 +145,6 @@ try {
 finally {
     Remove-Item -LiteralPath $spawnWork -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $fakeWt -Force -ErrorAction SilentlyContinue
-}
-if ($smoke -notmatch 'Get-SmokeWatcherSpawnDecision') {
-    throw 'Invoke-Smoke must call Get-SmokeWatcherSpawnDecision for Watch spawn'
 }
 if ($smoke -notmatch 'Stopping prior host Watch') {
     throw 'Invoke-Smoke must stop a prior Watch before publish-watch (DLL lock)'
@@ -303,12 +303,6 @@ if ($smoke -match 'New-PSSessionOption') {
 }
 
 # Offline OOBE (default): defer NAT until Supervisor; -OnlineOobe escape (#155).
-if ($statusSrc -notmatch 'function Get-SmokeNicAttachAtCreateDecision') {
-    throw 'SmokeStatus must define Get-SmokeNicAttachAtCreateDecision'
-}
-if ($statusSrc -notmatch 'function Get-SmokeNicReconnectDecision') {
-    throw 'SmokeStatus must define Get-SmokeNicReconnectDecision'
-}
 if ($statusSrc -notmatch 'function New-SmokeOfflineOobeProfile') {
     throw 'SmokeStatus must define New-SmokeOfflineOobeProfile'
 }
@@ -374,11 +368,47 @@ if ((Get-SmokeNicReconnectDecision -OnlineOobe:$false -AlreadyConnected:$true -S
 if ((Get-SmokeNicReconnectDecision -OnlineOobe:$true -AlreadyConnected:$false -SupervisorRunning:$true -GuestUpSticky:$true) -cne 'skip') {
     throw 'OnlineOobe skips reconnect path'
 }
+$t = Invoke-Tick @{}
+if ($t.NicAttach -cne 'defer') { throw 'tick: offline OOBE defers NIC at create' }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: offline hold before guest-up / Supervisor' }
+$t = Invoke-Tick @{ OnlineOobe = $true }
+if ($t.NicAttach -cne 'connect') { throw 'tick: OnlineOobe connects at create' }
+if ($t.NicReconnect -cne 'skip') { throw 'tick: OnlineOobe skips reconnect' }
+$t = Invoke-Tick @{ PlanRequiresNetwork = $true }
+if ($t.NicAttach -cne 'connect') { throw 'tick: plan requiresNetwork attaches NAT at create' }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: requiresNetwork holds before guest-up' }
+$t = Invoke-Tick @{ SupervisorRunning = $true }
+if ($t.NicAttach -cne 'defer') { throw 'tick: Supervisor does not change attach-at-create' }
+if ($t.NicReconnect -cne 'connect') { throw 'tick: offline reconnect on Supervisor' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; GuestUpStickySeconds = 60 }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: bare guest-up holds (CXH / ZDP)' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; GuestUpStickySeconds = 360 }
+if ($t.NicReconnect -cne 'connect') { throw 'tick: offline fallback reconnect after guest-up defer window' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; GuestUpStickySeconds = 30; PlanRequiresNetwork = $true }
+if ($t.NicAttach -cne 'connect') { throw 'tick: requiresNetwork connects at create' }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: requiresNetwork guest-up defer must still clear early CXH window' }
+$t = Invoke-Tick @{ GuestUpSticky = $true; GuestUpStickySeconds = 45; PlanRequiresNetwork = $true }
+if ($t.NicReconnect -cne 'connect') { throw 'tick: requiresNetwork attaches NAT after short guest-up defer' }
+$t = Invoke-Tick @{ NicConnected = $true; SupervisorRunning = $true; GuestUpSticky = $true; GuestUpStickySeconds = 360 }
+if ($t.NicReconnect -cne 'skip') { throw 'tick: already connected skips reconnect' }
+$t = Invoke-Tick @{ OnlineOobe = $true; NicConnected = $false; SupervisorRunning = $true; GuestUpSticky = $true }
+if ($t.NicReconnect -cne 'skip') { throw 'tick: OnlineOobe skips reconnect path' }
+$t = Invoke-Tick @{ HeartbeatOk = $true; ConsecutiveHeartbeatOk = 1; GuestUpSticky = $false; GuestUpStickySeconds = 400 }
+if (-not [bool]$t.GuestUpSticky) { throw 'tick: second heartbeat arms sticky' }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: arming guest-up restarts the NIC defer clock' }
+$t = Invoke-Tick @{ VmState = 'Off'; GuestUpSticky = $true; GuestUpStickySeconds = 400 }
+if ([bool]$t.GuestUpSticky) { throw 'tick: Off clears sticky' }
+if ($t.NicReconnect -cne 'hold') { throw 'tick: Off does not attach from a stale guest-up clock' }
+if ($smoke -match 'Get-SmokeNicAttachAtCreateDecision|Get-SmokeNicReconnectDecision') {
+    throw 'Invoke-Smoke must not re-decide NIC — the wait tick returns NicAttach and NicReconnect'
+}
+if ($smoke -notmatch 'NicAttach' -or $smoke -notmatch 'NicReconnect') {
+    throw 'Invoke-Smoke must perform tick NicAttach and NicReconnect'
+}
 if ($smoke -notmatch '\[switch\] \$OnlineOobe') { throw 'Invoke-Smoke must expose -OnlineOobe' }
 if ($smoke -notmatch 'New-SmokeOfflineOobeProfile') { throw 'Invoke-Smoke must build offline-OOBE Apply overlay' }
-if ($smoke -notmatch 'Get-SmokeNicAttachAtCreateDecision') { throw 'Invoke-Smoke must gate Connect at create' }
-if ($smoke -notmatch 'Get-SmokeNicReconnectDecision') { throw 'Invoke-Smoke must reconnect offline NIC' }
-if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into NIC reconnect' }
+if ($smoke -notmatch 'GuestUpStickySeconds') { throw 'Invoke-Smoke must pass guest-up age into the wait snap' }
+if ($smoke -notmatch 'NicConnected') { throw 'Invoke-Smoke must pass live NIC state into the wait snap' }
 if ($smoke -match 'GuestSecretPath|InteractiveOobeLocal|Start-OobeLocalProof') {
     throw 'Invoke-Smoke must not retain oobeLocal GuestSecretPath / proof harness'
 }
@@ -469,8 +499,35 @@ if ((Get-SmokeSuspendVmDecision -FailureMessage 'Apply failed: 1') -cne 'skip') 
 if ((Get-SmokeSuspendVmDecision -FailureMessage "Smoke acceptance requires outcome Complete, got 'Failed' (Failed/Reboot is not green)") -cne 'shutdown') {
     throw 'assert fail must ACPI-shutdown (leftover Running + TurnOff is DirtyShutdown / why-did-my-PC-restart)'
 }
-if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $true) -cne 'skip') { throw 'live watcher is unique' }
-if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive $false) -cne 'spawn') { throw 'dead marker respawns' }
+$liveDir = Join-Path ([IO.Path]::GetTempPath()) ('winmint-scratch-live-' + [guid]::NewGuid().ToString('N'))
+$liveLeaf = Split-Path -Leaf $liveDir
+if (-not (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'WinMint.Cli.exe' -CommandLine "WinMint.Cli.exe build --work $liveDir")) {
+    throw 'scratch liveness: WinMint.Cli command line with the workdir is live'
+}
+if (-not (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'pwsh.exe' -CommandLine "pwsh -File Invoke-ServicingPlan.ps1 .scratch\$liveLeaf")) {
+    throw 'scratch liveness: Invoke-ServicingPlan with .scratch\leaf is live'
+}
+if (-not (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'pwsh.exe' -CommandLine "pwsh -File Invoke-ServicingPlan.ps1 .scratch/$liveLeaf")) {
+    throw 'scratch liveness: Invoke-ServicingPlan with .scratch/leaf is live'
+}
+if (-not (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'dism.exe' -CommandLine "dism.exe /Image:$liveDir\mount")) {
+    throw 'scratch liveness: dism command line with the workdir is live'
+}
+if (-not (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'WinMint.Cli.exe' -CommandLine "WinMint.Cli.exe build --work $liveDir".ToUpperInvariant())) {
+    throw 'scratch liveness: workdir match is case-insensitive'
+}
+if (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'notepad.exe' -CommandLine "notepad $liveDir") {
+    throw 'scratch liveness: unrelated process name is not live'
+}
+if (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'pwsh.exe' -CommandLine "pwsh -File something-else.ps1 $liveDir") {
+    throw 'scratch liveness: pwsh without WinMint.Cli, Invoke-ServicingPlan, or dism is not live'
+}
+if (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'dism.exe' -CommandLine 'dism.exe /Image:C:\other\work') {
+    throw 'scratch liveness: dism against another directory is not live'
+}
+if (Test-SmokeScratchWorkDirCommandLine -Dir $liveDir -ProcessName 'pwsh.exe' -CommandLine '') {
+    throw 'scratch liveness: empty command line is not live'
+}
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('smoke-status-' + [guid]::NewGuid().ToString('N'))
 $statusPath = Join-Path $tmp 'smoke-status.json'

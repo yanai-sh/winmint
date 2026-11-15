@@ -55,29 +55,30 @@ internal static class ImageServicingTestFakes
                 File.WriteAllText(outputIso, "fake-iso");
             }
 
-            ServicingStage? publishUsb = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.PublishUsbMedia);
-            if (publishUsb is null
-                || !publishUsb.Parameters.TryGetValue(StageParams.UsbMediaReceiptPath, out string? receiptPath)
-                || string.IsNullOrWhiteSpace(receiptPath))
+            Dictionary<string, string> digests = new(StringComparer.Ordinal)
             {
-                return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
-                    new Failure("servicing.usbMedia.missing", "PublishUsbMedia stage missing receipt path.")));
+                ["outputIso.sha256"] = new string('a', 64),
+            };
+            ServicingStage? publishUsb = stages.FirstOrDefault(s => s.Opcode == ServicingOpcode.PublishUsbMedia);
+            if (publishUsb is not null)
+            {
+                if (!publishUsb.Parameters.TryGetValue(StageParams.UsbMediaReceiptPath, out string? receiptPath)
+                    || string.IsNullOrWhiteSpace(receiptPath))
+                {
+                    return Task.FromResult(Result.Fail<ElevatedRunOk, Failure>(
+                        new Failure("servicing.usbMedia.missing", "PublishUsbMedia stage missing receipt path.")));
+                }
+
+                File.WriteAllText(receiptPath, """{"schemaVersion":"winmint.usb-media/v1","files":[]}""");
+                digests["usbMedia.sha256"] = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(receiptPath)));
+                if (CorruptUsbReceiptAfterDigest)
+                {
+                    File.AppendAllText(receiptPath, " ");
+                }
             }
-            File.WriteAllText(receiptPath, """{"schemaVersion":"winmint.usb-media/v1","files":[]}""");
-            string receiptSha = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(receiptPath)));
 
             Directory.CreateDirectory(workspace.Logs);
-            File.WriteAllText(
-                workspace.Digests,
-                JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["outputIso.sha256"] = new string('a', 64),
-                    ["usbMedia.sha256"] = receiptSha,
-                }));
-            if (CorruptUsbReceiptAfterDigest)
-            {
-                File.AppendAllText(receiptPath, " ");
-            }
+            File.WriteAllText(workspace.Digests, JsonSerializer.Serialize(digests));
 
             return Task.FromResult(Result.Ok<ElevatedRunOk, Failure>(default));
         }
@@ -113,6 +114,10 @@ internal static class ImageServicingTestFakes
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
             Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
+        StubFakeMountQuery(servicing);
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Enable-WinMintStayAwake.ps1"),
+            Path.Combine(servicing, "Enable-WinMintStayAwake.ps1"));
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Invoke-WinMintDism.ps1"),
             Path.Combine(servicing, "Invoke-WinMintDism.ps1"));
@@ -187,6 +192,36 @@ internal static class ImageServicingTestFakes
                 },
             }));
         return runner;
+    }
+
+    /// <summary>
+    /// The copied plan calls <c>Resolve-WinMintStaleMount</c> before the opcode under test.
+    /// That queries real <c>dism.exe</c>, which exits 740 unelevated and becomes <c>failure.json</c>.
+    /// The fake root keeps the query and leftover discard off that path. Commands injection still wins.
+    /// </summary>
+    internal static void StubFakeMountQuery(string servicingDirectory)
+    {
+        File.AppendAllText(
+            Path.Combine(servicingDirectory, "Resolve-WinMintMount.ps1"),
+            """
+
+            function Get-WinMintMountedImage {
+                param($Commands)
+                $injected = Get-WinMintMountCommand -Commands $Commands -Name 'GetMountedImages'
+                if ($injected) { return @(& $injected) }
+                return @()
+            }
+
+            function Invoke-WinMintUnmountDiscard {
+                param(
+                    [Parameter(Mandatory)] [string] $MountDir,
+                    $Commands
+                )
+                $injected = Get-WinMintMountCommand -Commands $Commands -Name 'UnmountDiscard'
+                if ($injected) { & $injected $MountDir }
+            }
+
+            """);
     }
 
     /// <summary>Parse <c>{work}/stages.json</c> the way Invoke-ServicingPlan.ps1 does, so the fake and pwsh share one contract.</summary>

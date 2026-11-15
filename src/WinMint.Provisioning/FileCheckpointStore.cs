@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace WinMint.Provisioning;
 
 /// <summary>Heartbeat + checkpoint under ProgramData (plain phase string, same shape as heartbeat).</summary>
@@ -27,10 +29,13 @@ public sealed class FileCheckpointStore : ICheckpointStore
         DateTimeOffset? heartbeat = null;
         if (File.Exists(_heartbeatPath))
         {
-            string text = File.ReadAllText(_heartbeatPath).Trim();
+            string first = File.ReadAllText(_heartbeatPath)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n', 2)[0]
+                .Trim();
             if (DateTimeOffset.TryParse(
-                    text,
-                    null,
+                    first,
+                    CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.RoundtripKind,
                     out DateTimeOffset parsed))
             {
@@ -38,13 +43,49 @@ public sealed class FileCheckpointStore : ICheckpointStore
             }
         }
 
-        return new TenureState(inProgress, heartbeat);
+        (long? bootId, string? phase, int? resumeCount) = ReadBootStamp();
+        return new TenureState(inProgress, heartbeat, bootId, phase, resumeCount);
     }
 
-    public void WriteHeartbeat(DateTimeOffset utcNow)
+    public void WriteHeartbeat(DateTimeOffset utcNow, long? bootId, string? phase, int? resumeCount)
     {
         EnsureDir(_heartbeatPath);
-        File.WriteAllText(_heartbeatPath, utcNow.ToString("o"));
+        string utc = utcNow.ToString("o", CultureInfo.InvariantCulture);
+        string body = bootId is long boot && resumeCount is int count
+            ? string.Join(
+                '\n',
+                utc,
+                boot.ToString(CultureInfo.InvariantCulture),
+                (phase ?? "").Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal),
+                count.ToString(CultureInfo.InvariantCulture))
+            : utc;
+        File.WriteAllText(_heartbeatPath, body);
+    }
+
+    private (long? BootId, string? Phase, int? ResumeCount) ReadBootStamp()
+    {
+        if (!File.Exists(_heartbeatPath))
+        {
+            return (null, null, null);
+        }
+
+        string[] lines = File.ReadAllText(_heartbeatPath)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n');
+        if (lines.Length > 0 && lines[^1].Length == 0)
+        {
+            lines = lines[..^1];
+        }
+
+        if (lines.Length < 4
+            || !long.TryParse(lines[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long bootId)
+            || !int.TryParse(lines[3].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int resumeCount))
+        {
+            return (null, null, null);
+        }
+
+        return (bootId, lines[2], resumeCount);
     }
 
     public void WriteTenurePhase(string code)

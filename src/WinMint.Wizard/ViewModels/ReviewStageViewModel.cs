@@ -8,18 +8,6 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
 
-public interface IReviewStageViewModel
-{
-    ReviewSummaryViewModel Summary { get; }
-    ReviewBuildViewModel Build { get; }
-    StageStatusViewModel Status { get; }
-    IAsyncRelayCommand ReplanCommand { get; }
-    IAsyncRelayCommand SaveProfileCommand { get; }
-    IAsyncRelayCommand ExportStationPackCommand { get; }
-    IAsyncRelayCommand BuildCommand { get; }
-    IRelayCommand CancelBuildCommand { get; }
-}
-
 internal interface IReviewStageHost
 {
     Task ReplanAsync();
@@ -65,7 +53,7 @@ public sealed partial class ReviewBuildViewModel : ObservableObject
         "Offline servicing can take several hours. Status updates are normal — not a stall.";
 }
 
-internal sealed partial class ReviewStageViewModel : ObservableObject, IReviewStageViewModel
+public sealed partial class ReviewStageViewModel : ObservableObject
 {
     private IReviewStageHost? _host;
 

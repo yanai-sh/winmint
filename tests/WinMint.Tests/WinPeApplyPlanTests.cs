@@ -32,9 +32,9 @@ public class WinPeApplyPlanTests
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
+                ServicingOpcode.AddQualityUpdates,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
-                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages);
@@ -44,7 +44,9 @@ public class WinPeApplyPlanTests
     public async Task Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(
+            profile,
+            new HostComposeOptions(IncludeUsbMedia: true));
         Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
 
         string work = NewTempDir();

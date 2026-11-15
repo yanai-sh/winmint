@@ -157,6 +157,54 @@ function Get-WimIndexList {
     return ,(ConvertFrom-WimInfoListText -Text ($parts -join "`n"))
 }
 
+function Resolve-WinMintIsoVolumeRoot {
+    param($Volume)
+    # Mount-DiskImage can surface the disk image, or a volume whose letter is not
+    # published yet. Reading the letter property then throws under StrictMode.
+    if ($null -eq $Volume) { return $null }
+    $props = $Volume.PSObject.Properties
+    $letterProp = $props['DriveLetter']
+    if ($null -ne $letterProp -and $null -ne $letterProp.Value) {
+        $letter = ([string]$letterProp.Value).Trim()
+        if ($letter.Length -eq 1 -and [char]::IsLetter($letter[0])) {
+            return $letter + ':'
+        }
+    }
+    $pathProp = $props['Path']
+    if ($null -eq $pathProp -or [string]::IsNullOrWhiteSpace([string]$pathProp.Value)) { return $null }
+    $path = [string]$pathProp.Value
+    if ($path -notmatch '^\\\\\?\\Volume\{[0-9a-fA-F-]+\}\\?$') { return $null }
+    if (-not $path.EndsWith('\')) { $path += '\' }
+    return $path
+}
+
+function Get-WinMintMountedIsoRoot {
+    param(
+        [Parameter(Mandatory)]
+        [string] $IsoPath,
+
+        [int] $TimeoutSeconds = 30
+    )
+
+    $deadline = [Diagnostics.Stopwatch]::StartNew()
+    $lastError = ''
+    while ($true) {
+        try {
+            foreach ($volume in @(Get-DiskImage -ImagePath $IsoPath -ErrorAction Stop | Get-Volume -ErrorAction Stop)) {
+                $root = Resolve-WinMintIsoVolumeRoot -Volume $volume
+                if ($root) { return $root }
+            }
+        }
+        catch {
+            $lastError = $_.Exception.Message
+        }
+        if ($deadline.Elapsed.TotalSeconds -ge $TimeoutSeconds) { break }
+        Start-Sleep -Milliseconds 500
+    }
+    $detail = if ([string]::IsNullOrWhiteSpace($lastError)) { '' } else { " ($lastError)" }
+    throw "wim.probe.unreadable: ISO mounted but no volume path$detail"
+}
+
 function Get-SourceIsoWimIndexList {
     param(
         [Parameter(Mandatory)]
@@ -167,15 +215,9 @@ function Get-SourceIsoWimIndexList {
         throw "wim.probe.isoMissing: Source ISO not found: $IsoPath"
     }
 
-    $disk = Mount-DiskImage -ImagePath $IsoPath -PassThru -ErrorAction Stop
+    $null = Mount-DiskImage -ImagePath $IsoPath -PassThru -ErrorAction Stop
     try {
-        Start-Sleep -Seconds 1
-        $letter = ($disk | Get-Volume | Select-Object -First 1).DriveLetter
-        if ([string]::IsNullOrWhiteSpace($letter)) {
-            throw 'wim.probe.unreadable: ISO mounted but no drive letter'
-        }
-
-        $isoRoot = "${letter}:"
+        $isoRoot = Get-WinMintMountedIsoRoot -IsoPath $IsoPath
         $wimFile = Join-Path $isoRoot 'sources\install.wim'
         if (-not (Test-Path -LiteralPath $wimFile)) {
             $esd = Join-Path $isoRoot 'sources\install.esd'

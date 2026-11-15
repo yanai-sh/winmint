@@ -15,6 +15,7 @@ $hostApply = Get-Content -LiteralPath (Join-Path $repo 'tools\apply\Invoke-HostA
 if ($hostApply -notmatch '\[int\] \$WimIndex = 0') { throw 'Invoke-HostApply missing -WimIndex param' }
 if ($hostApply -notmatch "\-\-wim-index") { throw 'Invoke-HostApply must emit --wim-index when set' }
 if ($hostApply -notmatch '\$WimIndex -gt 0') { throw 'Invoke-HostApply must omit --wim-index when WimIndex is 0' }
+if ($hostApply -notmatch '--include-usb-media') { throw 'Invoke-HostApply must pass --include-usb-media' }
 
 $gate = Get-Content -LiteralPath (Join-Path $repo 'tools\apply\Invoke-PrimaryGate.ps1') -Raw -Encoding utf8
 if ($gate -notmatch 'Get-WinMintDefaultWimIndex') { throw 'PrimaryGate must resolve host-edition WimIndex' }

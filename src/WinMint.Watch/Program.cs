@@ -14,6 +14,9 @@ internal static class Program
     private const int RefreshSeconds = 2;
     private const int DoneTicksToExit = 3;
 
+    /// <summary>Unchanged <c>seq=</c> reads before the line says stale. 60 reads at <see cref="RefreshSeconds"/> is the old 120s window.</summary>
+    internal const int StaleAfterUnchangedReads = 60;
+
     private static int Main(string[] args)
     {
         if (!TryParseArgs(args, out string work, out string kind, out string priorRunId, out string markerPath))
@@ -56,6 +59,8 @@ internal static class Program
         System.Diagnostics.Stopwatch? statusAge = null;
         string lastSmokeFingerprint = string.Empty;
         int doneTicks = 0;
+        long? lastApplySeq = null;
+        int unchangedApplyReads = 0;
 
         try
         {
@@ -105,7 +110,7 @@ internal static class Program
                             lastHostLine = smoke.LastHostLine ?? string.Empty;
                         }
 
-                        string alive = FormatAlive(apply.Updated);
+                        string alive = NoteApplySeq(apply.Seq, ref lastApplySeq, ref unchangedApplyReads);
                         double? proofPct = ApplyEvents.TryLatestProofPercent(events);
                         ctx.UpdateTarget(BuildFrame(
                             title,
@@ -224,15 +229,25 @@ internal static class Program
         return new Rows([.. header, new Rule(), table, new Markup(footer)]);
     }
 
-    private static string FormatAlive(DateTimeOffset? updated)
+    internal static string FormatAlive(int unchangedReads) =>
+        unchangedReads > StaleAfterUnchangedReads ? "status stale" : "alive";
+
+    private static string NoteApplySeq(long? seq, ref long? lastSeq, ref int unchangedReads)
     {
-        if (updated is null)
+        if (seq is not long current)
         {
             return "alive -";
         }
 
-        double seconds = Math.Max(0, (DateTimeOffset.UtcNow - updated.Value).TotalSeconds);
-        return seconds > 120 ? $"status stale {seconds:0}s" : $"alive {seconds:0}s";
+        if (lastSeq != current)
+        {
+            lastSeq = current;
+            unchangedReads = 0;
+            return FormatAlive(0);
+        }
+
+        unchangedReads++;
+        return FormatAlive(unchangedReads);
     }
 
     private static string GetSmokeWatchVerdict(
@@ -285,7 +300,7 @@ internal static class Program
         {
             string stage = string.Empty;
             string log = string.Empty;
-            DateTimeOffset? updated = null;
+            long? seq = null;
             foreach (string line in File.ReadLines(path))
             {
                 if (line.StartsWith("stage=", StringComparison.Ordinal))
@@ -296,14 +311,14 @@ internal static class Program
                 {
                     log = line[4..];
                 }
-                else if (line.StartsWith("updated=", StringComparison.Ordinal)
-                    && DateTimeOffset.TryParse(line[8..], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset dto))
+                else if (line.StartsWith("seq=", StringComparison.Ordinal)
+                    && long.TryParse(line[4..], NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed))
                 {
-                    updated = dto;
+                    seq = parsed;
                 }
             }
 
-            return new ApplyStatusSnap(stage, log, updated);
+            return new ApplyStatusSnap(stage, log, seq);
         }
         catch (IOException)
         {
@@ -384,7 +399,7 @@ internal static class Program
                 || string.Equals(kind, "apply", StringComparison.OrdinalIgnoreCase));
     }
 
-    private readonly record struct ApplyStatusSnap(string Stage, string Log, DateTimeOffset? Updated);
+    private readonly record struct ApplyStatusSnap(string Stage, string Log, long? Seq);
 }
 
 internal sealed record SmokeStatusSnap(

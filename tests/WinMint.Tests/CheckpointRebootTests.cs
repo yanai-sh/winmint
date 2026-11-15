@@ -109,6 +109,51 @@ public class CheckpointRebootTests
     }
 
     [Fact]
+    public async Task Shell_new_boot_resumes_after_forward_wall_clock_jump()
+    {
+        ManualTimeProvider time = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        RecordingCheckpoints checkpoints = new();
+        RecordingProcessHost processes = new();
+        RecordingSplashPresenter splash = new();
+        RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Winlogon = winlogon,
+            Checkpoints = checkpoints,
+            Processes = processes,
+            BootId = 1,
+        };
+
+        ProvisionJob[] jobs =
+        [
+            new ProvisionJob("smoke.stub.reboot", ProvisionJobKind.Stub, NeedsReboot: true),
+            new ProvisionJob("smoke.stub.complete", ProvisionJobKind.Stub),
+        ];
+        ShellEnvironment env = Env(guest, evidence, time, splash);
+
+        SessionResult first = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs),
+            env,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(SessionOutcome.Reboot, first.Outcome);
+
+        guest.BootId = 2;
+        time.JumpWallClock(TimeSpan.FromHours(3));
+
+        SessionResult second = await ProvisioningSession.RunShellAsync(
+            BundleFastSettle(jobs),
+            env,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Complete, second.Outcome);
+        Assert.NotEqual("shell.stale", second.FinalStatus.Code);
+        Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
+        Assert.Equal(ProvisioningSession.ExplorerShell, winlogon.Shell);
+        Assert.Null(checkpoints.LastWritten);
+    }
+
+    [Fact]
     public async Task Shell_resume_hard_mismatch_fails_before_remaining_jobs()
     {
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
@@ -166,13 +211,19 @@ public class CheckpointRebootTests
         {
             FileCheckpointStore store = new(root);
             store.WriteCheckpoint(new CheckpointState("jobs:2"));
-            store.WriteHeartbeat(DateTimeOffset.UnixEpoch);
+            store.WriteHeartbeat(DateTimeOffset.UnixEpoch, 7, "jobs:2", 1);
 
             Assert.Equal("jobs:2", store.TryReadCheckpoint()!.Phase);
             TenureState tenure = store.ReadTenure();
             Assert.True(tenure.CheckpointInProgress);
             Assert.Equal(DateTimeOffset.UnixEpoch, tenure.HeartbeatUtc);
+            Assert.Equal(7, tenure.BootId);
+            Assert.Equal("jobs:2", tenure.Phase);
+            Assert.Equal(1, tenure.ResumeCount);
             Assert.Equal("jobs:2", File.ReadAllText(Path.Combine(root, "checkpoint.json")).Trim());
+            Assert.Equal(
+                DateTimeOffset.UnixEpoch.ToString("o") + "\n7\njobs:2\n1",
+                File.ReadAllText(Path.Combine(root, "heartbeat")));
 
             store.ClearCheckpoint();
             Assert.Null(store.TryReadCheckpoint());

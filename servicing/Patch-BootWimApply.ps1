@@ -6,6 +6,8 @@ param(
     [Parameter(Mandatory)] [string] $QualityPackageDir
 )
 # Source-ISO edition index is unrelated: after single-image export, apply target is always index 1.
+# Also loaded when this file is dot-sourced: Assert-WinMintBootManagerCa2023 calls the contract.
+. (Join-Path $PSScriptRoot 'WinPeApplyContract.ps1')
 
 function Copy-WinMintMediaBootFile {
     [CmdletBinding(SupportsShouldProcess)]
@@ -113,24 +115,6 @@ function Test-WinMintPeImage {
     finally {
         $stream.Dispose()
     }
-}
-
-function Test-WinMintBootManagerCa2023 {
-    <#
-    .SYNOPSIS
-      A Valid Authenticode signer is current when it is Windows UEFI CA 2023 or a
-      Windows Production PCA from 2023 on. Production PCA 2011 stays rejected.
-      26H2 bootmgfw is issued by Microsoft Windows Production PCA 2026.
-    #>
-    param(
-        [Parameter(Mandatory)]
-        $Signature
-    )
-    if ($Signature.Status -ne [Management.Automation.SignatureStatus]::Valid) { return $false }
-    $cert = $Signature.SignerCertificate
-    $blob = if ($null -eq $cert) { '' } else { "$($cert.Subject)`n$($cert.Issuer)" }
-    if ($blob -match 'PCA 2011') { return $false }
-    return $blob -match 'Windows UEFI CA 2023' -or $blob -match 'Production PCA 20(2[3-9]|[3-9]\d)'
 }
 
 function Assert-WinMintBootManagerCa2023 {

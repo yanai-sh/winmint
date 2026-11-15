@@ -128,32 +128,12 @@ function Clear-SmokeWorkVhd {
 
 function Test-ScratchWorkDirLiveHeavy {
     # Live Apply/Smoke in another .scratch workdir — KeepWorkDirs hygiene race / dual DISM.
+    # Command lines only. A status file is not a liveness input.
     param([Parameter(Mandatory)][string] $Dir)
-    $statusPath = Join-Path $Dir 'smoke-status.json'
-    if (Test-Path -LiteralPath $statusPath -PathType Leaf) {
-        try {
-            $j = Get-Content -LiteralPath $statusPath -Raw -Encoding utf8 | ConvertFrom-Json
-            $phase = [string]$j.phase
-            if ($phase -notin @('green', 'failed', 'assert')) {
-                $waiter = 0
-                if ([int]::TryParse([string]$j.waiterPid, [ref]$waiter) -and $waiter -gt 0) {
-                    if ($null -ne (Get-Process -Id $waiter -ErrorAction SilentlyContinue)) { return $true }
-                }
-            }
-        }
-        catch { $null = $_ }
-    }
-    $dirFull = [IO.Path]::GetFullPath($Dir).TrimEnd('\')
-    $leaf = Split-Path -Leaf $dirFull
-    $scratchRel = @(".scratch\$leaf", ".scratch/$leaf")
     foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -match '^(WinMint\.Cli|dism|pwsh)\.exe$' })) {
-        $cmd = [string]$p.CommandLine
-        if ([string]::IsNullOrWhiteSpace($cmd)) { continue }
-        if ($cmd -notmatch 'WinMint\.Cli|Invoke-ServicingPlan|dism(\.exe)?') { continue }
-        if ($cmd.IndexOf($dirFull, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
-        foreach ($rel in $scratchRel) {
-            if ($cmd.IndexOf($rel, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+        if (Test-SmokeScratchWorkDirCommandLine -Dir $Dir -ProcessName $p.Name -CommandLine ([string]$p.CommandLine)) {
+            return $true
         }
     }
     return $false
@@ -303,11 +283,9 @@ if (-not $SkipApply) {
     Remove-Item -LiteralPath (Join-Path $Work 'apply-events.jsonl') -Force -ErrorAction SilentlyContinue
 }
 
-# Marker cleared above — always spawn for this run (decision helper keeps contract pin).
-if ((Get-SmokeWatcherSpawnDecision -MarkerPidAlive:$false) -eq 'spawn') {
-    Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
-        -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
-}
+# Marker cleared above — spawn Watch for this run.
+Start-WinMintHostWatchProcess -RepoRoot $repoRoot -Work $workFull -Kind smoke `
+    -PriorRunId '' -MarkerPath $watcherMarker -PwshExe $pwshExe
 
 $applyEvidence = Join-Path $Work 'evidence.json'
 # Resolve pre-Apply only for -SkipApply reuse. A full run resolves after Apply —
@@ -419,16 +397,8 @@ $pins = Get-WinMintDebloatPinsFromStages -StagesPath (Join-Path $Work 'stages.js
 $pinnedRemoveAppx = @($pins.PinnedRemoveAppx)
 $pinnedRemoveCapabilities = @($pins.PinnedRemoveCapabilities)
 $pinnedDisableOptionalFeatures = @($pins.PinnedDisableOptionalFeatures)
+# Profile debloat is not a pin source. Stage ids stay on $pinnedRemoveAppx.
 $pinnedOnlineRemoveAppx = @()
-if ($pinnedRemoveAppx.Count -eq 0 -and $null -ne $profileDoc -and $profileDoc.PSObject.Properties.Name -contains 'debloat') {
-    $debloat = $profileDoc.debloat
-    if ($null -ne $debloat -and $debloat.PSObject.Properties.Name -contains 'removeProvisionedAppx') {
-        $mode = if ($debloat.PSObject.Properties.Name -contains 'mode') { [string]$debloat.mode } else { '' }
-        if ([string]::IsNullOrWhiteSpace($mode) -or $mode -eq 'online') {
-            $pinnedOnlineRemoveAppx = @($debloat.removeProvisionedAppx | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-        }
-    }
-}
 
 # ponytail: KeepWorkDirs=1 retains newest heavy workdir; recreate applyDir if a sibling race partial-wiped
 New-Item -ItemType Directory -Force -Path $applyDir, $guestDir | Out-Null
@@ -470,9 +440,12 @@ Enable-VMEventing -Force -ErrorAction SilentlyContinue
 
 $vhdx = Join-Path $Work 'smoke.vhdx'
 $existing = Get-VM -Name $VmName -ErrorAction SilentlyContinue
-$attachNicAtCreate = (Get-SmokeNicAttachAtCreateDecision `
-        -OnlineOobe:([bool]$OnlineOobe) `
-        -PlanRequiresNetwork:([bool]$script:SmokePlanRequiresNetwork)) -eq 'connect'
+# Attach-at-create is a wait-tick action. Off: the VM has not been started.
+$attachNicAtCreate = (Get-SmokeWaitTick -Snap ([pscustomobject]@{
+            VmState             = 'Off'
+            OnlineOobe          = [bool]$OnlineOobe
+            PlanRequiresNetwork = [bool]$script:SmokePlanRequiresNetwork
+        })).NicAttach -eq 'connect'
 if ($ReuseVm) {
     if (-not $existing) { throw "ReuseVm: VM '$VmName' not found" }
     Write-SmokeHostLine -Name "Reusing existing VM $VmName (state=$($existing.State))…" -Activity vm
@@ -908,6 +881,10 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
         }
 
         $hb = Test-GuestWindowsHeartbeat
+        $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
+        # Trust Hyper-V over script sticky — operator may Disconnect mid-wait.
+        $liveNic = Get-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -ErrorAction SilentlyContinue
+        $script:SmokeNicConnected = [bool]($liveNic -and -not [string]::IsNullOrWhiteSpace([string]$liveNic.SwitchName))
         $tick = Get-SmokeWaitTick -Snap ([pscustomobject]@{
                 VmState                  = $vmStateNow
                 LastVmState              = $script:LastVmState
@@ -933,6 +910,10 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
                 EmptyVhdFailAfterSeconds = [int]($EmptyVhdMinutes * 60)
                 NudgeElapsedMinutes      = $nudgeSw.Elapsed.TotalMinutes
                 HalfStallShot            = $script:HalfStallShot
+                GuestUpStickySeconds     = $guestUpSecs
+                OnlineOobe               = [bool]$OnlineOobe
+                PlanRequiresNetwork      = [bool]$script:SmokePlanRequiresNetwork
+                NicConnected             = [bool]$script:SmokeNicConnected
             })
         if ($tick.FailReason) { throw $tick.FailMessage }
 
@@ -967,18 +948,8 @@ while ($wallSw.Elapsed.TotalMinutes -lt $WallClockMinutes) {
             $script:GuestUpStickySw = [Diagnostics.Stopwatch]::StartNew()
             Write-SmokeHostLine -Name 'guest-up: stall only on Supervisor/evidence; CXH spinner ignored; NIC deferred past CXH' -Activity wait
         }
-        $guestUpSecs = if ($null -ne $script:GuestUpStickySw) { [int]$script:GuestUpStickySw.Elapsed.TotalSeconds } else { 0 }
         $script:ConsecutiveHeartbeatOk = [int]$tick.ConsecutiveHeartbeatOk
-        # Trust Hyper-V over script sticky — operator may Disconnect mid-wait.
-        $liveNic = Get-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -ErrorAction SilentlyContinue
-        $script:SmokeNicConnected = [bool]($liveNic -and -not [string]::IsNullOrWhiteSpace([string]$liveNic.SwitchName))
-        if ((Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$OnlineOobe) `
-                -AlreadyConnected:([bool]$script:SmokeNicConnected) `
-                -SupervisorRunning:([bool]$script:LastSupervisorRunning) `
-                -GuestUpSticky:([bool]$script:GuestUpSticky) `
-                -GuestUpStickySeconds $guestUpSecs `
-                -GuestUpNicDeferSeconds 360 `
-                -PlanRequiresNetwork:([bool]$script:SmokePlanRequiresNetwork)) -eq 'connect') {
+        if ($tick.NicReconnect -eq 'connect') {
             try {
                 Connect-VMNetworkAdapter -VMName $VmName -Name 'Network Adapter' -SwitchName 'Default Switch'
                 $script:SmokeNicConnected = $true

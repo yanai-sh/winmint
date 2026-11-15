@@ -11,12 +11,9 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) { throw 'USB media artifact validation requires Windows' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-# Dot-sourcing binds its parameters in this scope. Resolve first and pass that
-# path through; -WorkDirectory unused would replace the caller's WorkDirectory.
-$work = (Resolve-Path -LiteralPath $WorkDirectory).Path
-. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
+. (Join-Path $repo 'servicing\UsbMediaLayout.ps1')
 . (Join-Path $repo 'servicing\WinPeApplyContract.ps1')
-. (Join-Path $repo 'servicing\Patch-BootWimApply.ps1') -MediaDir $work -MountDir $work -WorkDirectory $work -QualityPackageDir $work
+$work = (Resolve-Path -LiteralPath $WorkDirectory).Path
 
 $receipt = Read-WinMintUsbReceipt -WorkDirectory $work
 $mediaDir = Join-Path $work 'media'
@@ -43,10 +40,8 @@ $bootInfo = & $wimlib info $bootWim 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) {
     throw "wimlib info failed for sources/boot.wim with exit code $LASTEXITCODE"
 }
-$imageCountMatch = [regex]::Match($bootInfo, '(?m)^Image Count:\s*(\d+)\s*$')
-if (-not $imageCountMatch.Success) { throw 'boot.wim has no indexes' }
-$imageCount = [int] $imageCountMatch.Groups[1].Value
-if ($imageCount -le 0) { throw 'boot.wim has no indexes' }
+$indexes = Get-WinPeWimIndex -Text $bootInfo
+if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
 $applyPaths = @(
     'Windows/System32/LaunchApply.cmd',
     'Windows/System32/winpeshl.ini',
@@ -55,7 +50,7 @@ $applyPaths = @(
 )
 $extractRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-static-boot-' + [guid]::NewGuid().ToString('N'))
 try {
-    foreach ($index in 1..$imageCount) {
+    foreach ($index in $indexes) {
         $mountDir = Join-Path $extractRoot ([string] $index)
         New-Item -ItemType Directory -Force -Path $mountDir | Out-Null
         $extractExit = 0
@@ -132,9 +127,19 @@ $bcdPath = Join-Path $mediaDir 'efi\microsoft\boot\bcd'
 if (-not (Test-Path -LiteralPath $bcdPath -PathType Leaf)) {
     throw 'USB media EFI BCD store is missing'
 }
-$bcdOutput = & "$env:SystemRoot\System32\bcdedit.exe" /store $bcdPath /enum all 2>&1
-if ($LASTEXITCODE -ne 0) { throw "bcdedit failed to enumerate the USB BCD store: $bcdOutput" }
-if (($bcdOutput -join "`n") -notmatch '(?i)winload\.efi') {
+# The application path is UTF-16LE in the hive. Opening the store through the boot-configuration
+# API rewrites it, including a read, and that rewrite changes the receipt digest.
+$bcdBytes = [IO.File]::ReadAllBytes($bcdPath)
+$loader = [Text.Encoding]::Unicode.GetBytes('winload.efi')
+$loaderFound = $false
+for ($i = 0; $i -le $bcdBytes.Length - $loader.Length; $i++) {
+    $loaderFound = $true
+    for ($j = 0; $j -lt $loader.Length; $j++) {
+        if ($bcdBytes[$i + $j] -ne $loader[$j]) { $loaderFound = $false; break }
+    }
+    if ($loaderFound) { break }
+}
+if (-not $loaderFound) {
     throw 'USB BCD store does not contain a Windows EFI loader'
 }
 

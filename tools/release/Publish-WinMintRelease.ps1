@@ -65,6 +65,13 @@ dotnet publish (Join-Path $repoRoot 'src\WinMint.WinPeApply\WinMint.WinPeApply.c
     -o $winPeOut
 if ($LASTEXITCODE -ne 0) { throw "WinPeApply publish failed: $LASTEXITCODE" }
 
+. (Join-Path $repoRoot 'tools\host\Write-WinMintSourceStamp.ps1')
+Write-WinMintSourceStamp -Exe (Join-Path $provOut 'WinMint.Provisioning.exe') -SourceRoots @(
+    (Join-Path $repoRoot 'src\WinMint.Provisioning'),
+    (Join-Path $repoRoot 'src\WinMint.Contracts'))
+Write-WinMintSourceStamp -Exe (Join-Path $winPeOut 'WinMintApply.exe') -SourceRoots @(
+    (Join-Path $repoRoot 'src\WinMint.WinPeApply'))
+
 Copy-Item -LiteralPath (Join-Path $repoRoot 'Justfile') -Destination $StageRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot 'config') -Destination (Join-Path $StageRoot 'config') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'servicing') -Destination (Join-Path $StageRoot 'servicing') -Recurse

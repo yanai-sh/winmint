@@ -140,6 +140,36 @@ if ($iot -ne 'IoTEnterpriseS') { throw "Test-WimMetadata: IoT Enterprise LTSC Ed
 $ws = Resolve-WimEditionId -Snapshot ([ordered]@{ Name = 'Windows 11 Pro for Workstations'; Edition = $null })
 if ($ws -ne 'ProfessionalWorkstation') { throw "Test-WimMetadata: Pro for Workstations EditionId got '$ws'" }
 
+# Letterless and not-yet-a-volume mounts must not touch .DriveLetter (StrictMode).
+$withLetter = Resolve-WinMintIsoVolumeRoot -Volume ([pscustomobject]@{
+        DriveLetter = 'E'
+        Path        = '\\?\Volume{595ff10e-db3e-11f1-bfa2-c4cb76908f35}\'
+    })
+if ($withLetter -ne 'E:') { throw "Test-WimMetadata: expected E: got '$withLetter'" }
+
+$letterless = Resolve-WinMintIsoVolumeRoot -Volume ([pscustomobject]@{
+        Path = '\\?\Volume{595ff10e-db3e-11f1-bfa2-c4cb76908f35}\'
+    })
+if ($letterless -ne '\\?\Volume{595ff10e-db3e-11f1-bfa2-c4cb76908f35}\') {
+    throw "Test-WimMetadata: expected volume path got '$letterless'"
+}
+$blankLetter = Resolve-WinMintIsoVolumeRoot -Volume ([pscustomobject]@{
+        DriveLetter = ''
+        Path        = '\\?\Volume{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}'
+    })
+if ($blankLetter -ne '\\?\Volume{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}\') {
+    throw "Test-WimMetadata: blank letter should use volume path, got '$blankLetter'"
+}
+if ($null -ne (Resolve-WinMintIsoVolumeRoot -Volume $null)) { throw 'Test-WimMetadata: null volume should have no root' }
+if ($null -ne (Resolve-WinMintIsoVolumeRoot -Volume ([pscustomobject]@{ ImagePath = 'C:\x.iso' }))) {
+    throw 'Test-WimMetadata: disk image object should have no root'
+}
+$metaSrc = Get-Content -LiteralPath (Join-Path $repo 'servicing\Get-WimMetadata.ps1') -Raw
+$cacheSrc = Get-Content -LiteralPath (Join-Path $repo 'servicing\Initialize-SourceMediaCache.ps1') -Raw
+if ($metaSrc -match '\.DriveLetter' -or $cacheSrc -match '\.DriveLetter') {
+    throw 'Test-WimMetadata: ISO mount must not read .DriveLetter'
+}
+
 # Probe child runs before ServicingPlan sets WINMINT_SERVICING_WORK (dd6abfa).
 $savedDismWork = $env:WINMINT_SERVICING_WORK
 try {

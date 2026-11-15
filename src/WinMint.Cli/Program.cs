@@ -1,8 +1,6 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 
-using Microsoft.Extensions.Logging;
-
 using WinMint.Contracts;
 using WinMint.Orchestrator;
 
@@ -10,8 +8,6 @@ namespace WinMint.Cli;
 
 internal static class Program
 {
-    private static readonly ILogger Log = ConsoleCliLogger.Instance;
-
     private static int Main(string[] args)
     {
         Argument<FileInfo> profileArgument = new("profile")
@@ -85,6 +81,11 @@ internal static class Program
                 "Plan wsl.platform (Hyper-V Smoke mocks it). No stubs; no real WSL distro install required.",
         };
 
+        Option<bool> includeUsbMediaOption = new("--include-usb-media")
+        {
+            Description = "Plan PublishUsbMedia and write usb-media.json. Default off.",
+        };
+
         Command validateCommand = new("validate", "Parse and plan a Profile; write nothing.")
         {
             profileArgument,
@@ -95,6 +96,7 @@ internal static class Program
             includeSmokeStubsOption,
             smokePlumbingOption,
             includeWslPlatformOption,
+            includeUsbMediaOption,
         };
         validateCommand.SetAction(parseResult =>
         {
@@ -107,7 +109,8 @@ internal static class Program
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
                 parseResult.GetValue(smokePlumbingOption),
-                parseResult.GetValue(includeWslPlatformOption));
+                parseResult.GetValue(includeWslPlatformOption),
+                parseResult.GetValue(includeUsbMediaOption));
         });
 
         Command planCommand = new("plan", "Parse and plan a Profile; emit plan artifacts.")
@@ -121,6 +124,7 @@ internal static class Program
             includeSmokeStubsOption,
             smokePlumbingOption,
             includeWslPlatformOption,
+            includeUsbMediaOption,
         };
         planCommand.SetAction(parseResult =>
         {
@@ -135,7 +139,8 @@ internal static class Program
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
                 parseResult.GetValue(smokePlumbingOption),
-                parseResult.GetValue(includeWslPlatformOption));
+                parseResult.GetValue(includeWslPlatformOption),
+                parseResult.GetValue(includeUsbMediaOption));
         });
 
         Command buildCommand = new("build", "Plan a Profile and apply ImageServicing (one elevated Invoke-ServicingPlan).")
@@ -152,6 +157,7 @@ internal static class Program
             includeSmokeStubsOption,
             smokePlumbingOption,
             includeWslPlatformOption,
+            includeUsbMediaOption,
         };
         buildCommand.SetAction(async parseResult =>
         {
@@ -172,7 +178,8 @@ internal static class Program
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
                 parseResult.GetValue(smokePlumbingOption),
-                parseResult.GetValue(includeWslPlatformOption));
+                parseResult.GetValue(includeWslPlatformOption),
+                parseResult.GetValue(includeUsbMediaOption));
         });
         Command packagesCheckCommand = new(
             "packages-check",
@@ -215,6 +222,7 @@ internal static class Program
             includeSmokeStubsOption,
             smokePlumbingOption,
             includeWslPlatformOption,
+            includeUsbMediaOption,
         };
         packCommand.SetAction(parseResult =>
         {
@@ -229,7 +237,8 @@ internal static class Program
                 ParsePackageStrictOverride(parseResult, packageStrictOption),
                 parseResult.GetValue(includeSmokeStubsOption),
                 parseResult.GetValue(smokePlumbingOption),
-                parseResult.GetValue(includeWslPlatformOption));
+                parseResult.GetValue(includeWslPlatformOption),
+                parseResult.GetValue(includeUsbMediaOption));
         });
         RootCommand root = new("WinMint — Profile plan and ImageServicing build")
         {
@@ -253,7 +262,8 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
         bool smokePlumbing,
-        bool includeWslPlatform)
+        bool includeWslPlatform,
+        bool includeUsbMedia)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -272,7 +282,8 @@ internal static class Program
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
                     SmokePlumbing: smokePlumbing,
-                    IncludeWslPlatform: includeWslPlatform)))
+                    IncludeWslPlatform: includeWslPlatform,
+                    IncludeUsbMedia: includeUsbMedia)))
         {
             return exit;
         }
@@ -282,11 +293,11 @@ internal static class Program
             HostCompile.ExportStationPack(plan!, profile!, outDir.FullName, passwordSource);
         if (!packed.IsOk)
         {
-            CliLog.Failure(Log, packed.Error.Code, packed.Error.Message);
+            WriteErr($"{packed.Error.Code}: {packed.Error.Message}");
             return 1;
         }
 
-        CliLog.StationPackWritten(Log, packed.Value.Directory, packed.Value.ProfilePath);
+        WriteOut($"Wrote Station pack to {packed.Value.Directory} (Apply Profile: {packed.Value.ProfilePath})");
         WritePlanHonesty(plan!.Review);
         return 0;
     }
@@ -303,11 +314,11 @@ internal static class Program
                 dma.LocationServicesEnabled));
         if (!emitted.IsOk)
         {
-            CliLog.Failure(Log, emitted.Error.Code, emitted.Error.Message);
+            WriteErr($"{emitted.Error.Code}: {emitted.Error.Message}");
             return 1;
         }
 
-        CliLog.CuratedDefaultsEmitted(Log, emitted.Value.ProfilePath, emitted.Value.PasswordPath);
+        WriteOut($"Wrote curated Profile {emitted.Value.ProfilePath} (bootstrap password: {emitted.Value.PasswordPath})");
         return 0;
     }
 
@@ -320,7 +331,7 @@ internal static class Program
         }
         catch (DirectoryNotFoundException ex)
         {
-            CliLog.Failure(Log, "packages.proof.toolkitMissing", ex.Message);
+            WriteErr($"packages.proof.toolkitMissing: {ex.Message}");
             return 1;
         }
 
@@ -328,14 +339,11 @@ internal static class Program
             await PackagesProof.RefreshAsync(toolkitRoot, ct).ConfigureAwait(false);
         if (!refreshed.IsOk)
         {
-            CliLog.Failure(Log, refreshed.Error.Code, refreshed.Error.Message);
+            WriteErr($"{refreshed.Error.Code}: {refreshed.Error.Message}");
             return 1;
         }
 
-        CliLog.PackagesProofRefreshed(
-            Log,
-            refreshed.Value.EntryCount,
-            refreshed.Value.ProofPath);
+        WriteOut($"Refreshed {refreshed.Value.EntryCount} package proofs: {refreshed.Value.ProofPath}");
         return 0;
     }
 
@@ -347,7 +355,8 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
         bool smokePlumbing,
-        bool includeWslPlatform)
+        bool includeWslPlatform,
+        bool includeUsbMedia)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -366,12 +375,13 @@ internal static class Program
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
                     SmokePlumbing: smokePlumbing,
-                    IncludeWslPlatform: includeWslPlatform)))
+                    IncludeWslPlatform: includeWslPlatform,
+                    IncludeUsbMedia: includeUsbMedia)))
         {
             return exit;
         }
 
-        CliLog.ProfileOk(Log);
+        WriteOut("Profile OK; plan OK.");
         return 0;
     }
 
@@ -384,7 +394,8 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
         bool smokePlumbing,
-        bool includeWslPlatform)
+        bool includeWslPlatform,
+        bool includeUsbMedia)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -403,7 +414,8 @@ internal static class Program
                     PackageStrict: packageStrict,
                     IncludeSmokeStubs: includeSmokeStubs,
                     SmokePlumbing: smokePlumbing,
-                    IncludeWslPlatform: includeWslPlatform)))
+                    IncludeWslPlatform: includeWslPlatform,
+                    IncludeUsbMedia: includeUsbMedia)))
         {
             return exit;
         }
@@ -411,10 +423,10 @@ internal static class Program
         Result<Unit, Failure> exported = HostCompile.ExportPlan(plan!, outDir.FullName);
         if (!exported.IsOk)
         {
-            CliLog.Failure(Log, exported.Error.Code, exported.Error.Message);
+            WriteErr($"{exported.Error.Code}: {exported.Error.Message}");
             return 1;
         }
-        CliLog.WrotePlanArtifacts(Log, outDir.FullName);
+        WriteOut($"Wrote plan artifacts to {outDir.FullName}");
         WritePlanHonesty(plan!.Review);
         return 0;
     }
@@ -431,7 +443,8 @@ internal static class Program
         PackageStrictOverride packageStrict,
         bool includeSmokeStubs,
         bool smokePlumbing,
-        bool includeWslPlatform)
+        bool includeWslPlatform,
+        bool includeUsbMedia)
     {
         if (!TryParseImageQuality(imageQuality, out ImageQualityLane lane, out int exit))
         {
@@ -451,6 +464,7 @@ internal static class Program
                     IncludeSmokeStubs: includeSmokeStubs,
                     SmokePlumbing: smokePlumbing,
                     IncludeWslPlatform: includeWslPlatform,
+                    IncludeUsbMedia: includeUsbMedia,
                     ImageArchitecture: imageArchitecture))
             .ConfigureAwait(false);
         if (!composed.IsOk)
@@ -460,21 +474,21 @@ internal static class Program
                 foreach (DocumentError issue in documents)
                 {
                     string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
-                    CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
+                    WriteErr($"{issue.Code}: {issue.Message}{pathSuffix}");
                 }
             }
             else
             {
-                CliLog.Failure(Log, composed.Error.Code, composed.Error.Message);
+                WriteErr($"{composed.Error.Code}: {composed.Error.Message}");
             }
-            CliLog.WorkPreserved(Log, work.FullName);
+            WriteErr($"Work directory preserved: {work.FullName}");
             return 1;
         }
 
         HostComposition composition = composed.Value;
         if (composition.Review.ImageQuality == ImageQualityLane.Release)
         {
-            CliLog.ReleaseLaneWarning(Log);
+            WriteErr("ImageQuality=Release uses compression=max + cleanup=full — prefer Test for iterative builds. The Output ISO is unstable. Do not write it to USB or install from it.");
         }
 
         WritePlanHonesty(composition.Review);
@@ -486,15 +500,15 @@ internal static class Program
                 .ConfigureAwait(false);
         if (!applied.IsOk)
         {
-            CliLog.Failure(Log, applied.Error.Code, applied.Error.Message);
-            CliLog.WorkPreserved(Log, work.FullName);
+            WriteErr($"{applied.Error.Code}: {applied.Error.Message}");
+            WriteErr($"Work directory preserved: {work.FullName}");
             return 1;
         }
 
-        CliLog.ImageOk(Log, applied.Value.OutputIsoPath);
-        CliLog.OutputIsoUnstable(Log);
-        CliLog.ShellStamp(Log, applied.Value.ShellStampTargetPath);
-        CliLog.Lane(Log, applied.Value.Lane);
+        WriteOut($"Image OK: {applied.Value.OutputIsoPath}");
+        WriteErr("Output ISO is unstable. Do not write it to USB. Do not boot it. Do not install from it. Live posture: post-install/Apply-LivePosture.ps1.");
+        WriteOut($"Shell stamp: {applied.Value.ShellStampTargetPath}");
+        WriteOut($"Lane: {applied.Value.Lane}");
         return 0;
     }
 
@@ -521,7 +535,7 @@ internal static class Program
             return true;
         }
 
-        CliLog.UnsupportedImageQuality(Log, raw);
+        WriteErr($"Unsupported --image-quality '{raw}' (expected Test|Release).");
         lane = ImageQualityLane.Test;
         exitCode = 1;
         return false;
@@ -538,7 +552,7 @@ internal static class Program
         profile = null;
         if (!profilePath.Exists)
         {
-            CliLog.ProfileNotFound(Log, profilePath.FullName);
+            WriteErr($"Profile not found: {profilePath.FullName}");
             exitCode = 1;
             return false;
         }
@@ -549,7 +563,7 @@ internal static class Program
             foreach (DocumentError issue in parsed.Error)
             {
                 string pathSuffix = issue.Path is null ? "" : $" ({issue.Path})";
-                CliLog.DocumentIssue(Log, issue.Code, issue.Message, pathSuffix);
+                WriteErr($"{issue.Code}: {issue.Message}{pathSuffix}");
             }
 
             exitCode = 1;
@@ -559,7 +573,7 @@ internal static class Program
         Result<HostPlan, HostComposeError> planned = HostCompile.PlanDocument(parsed.Value, options);
         if (!planned.IsOk)
         {
-            CliLog.Failure(Log, planned.Error.Code, planned.Error.Message);
+            WriteErr($"{planned.Error.Code}: {planned.Error.Message}");
             exitCode = 1;
             return false;
         }
@@ -574,27 +588,31 @@ internal static class Program
     {
         if (line.StartsWith("quiet ", StringComparison.Ordinal))
         {
-            CliLog.ApplyProgressWarn(Log, line);
+            WriteErr(line);
             return;
         }
 
-        CliLog.ApplyProgress(Log, line);
+        WriteOut(line);
     }
 
     private static void WritePlanHonesty(HostReview review)
     {
-        CliLog.Lane(Log, review.ImageQuality);
+        WriteOut($"Lane: {review.ImageQuality}");
         string honesty = review.Honesty;
         foreach (string line in honesty.Split(["\r\n", "\n"], StringSplitOptions.None))
         {
             if (line.StartsWith("Warning:", StringComparison.Ordinal))
             {
-                CliLog.HonestyWarning(Log, line);
+                WriteErr(line);
             }
             else if (line.Length > 0)
             {
-                CliLog.HonestyLine(Log, line);
+                WriteOut(line);
             }
         }
     }
+
+    private static void WriteOut(string line) => Console.WriteLine(line);
+
+    private static void WriteErr(string line) => Console.Error.WriteLine(line);
 }

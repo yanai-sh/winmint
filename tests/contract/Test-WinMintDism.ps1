@@ -57,6 +57,24 @@ finally {
 }
 if (-not $threw) { throw 'missing WINMINT_SERVICING_WORK must throw' }
 
+$slow = Join-Path $work 'slow-dism.ps1'
+@'
+Start-Sleep -Seconds 2
+Write-Output 'The operation completed successfully.'
+exit 0
+'@ | Set-Content -LiteralPath $slow -Encoding utf8
+$heard = [System.Collections.Generic.List[string]]::new()
+& {
+    Invoke-WinMintDism -DismPath (Get-Process -Id $PID).Path `
+        -ArgumentList @('-NoProfile', '-File', $slow) `
+        -Stage 'contract-heartbeat' `
+        -HeartbeatSeconds 1
+} 6>&1 | ForEach-Object { $heard.Add([string]$_) }
+$pulse = @($heard | Where-Object { $_ -match '^contract-heartbeat running \d+s$' })
+if ($pulse.Count -lt 1) { throw "expected DISM heartbeat, got: $($heard -join ' | ')" }
+$slowLog = Get-Content -LiteralPath (Join-Path $work 'dism-transcript.log') -Raw -Encoding utf8
+if ($slowLog -notmatch 'contract-heartbeat running \d+s') { throw 'transcript missing DISM heartbeat' }
+
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Output 'Test-WinMintDism ok'

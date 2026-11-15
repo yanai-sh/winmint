@@ -19,20 +19,7 @@ public sealed partial class StageStatusViewModel : ObservableObject
     internal void Clear() => Set("", false);
 }
 
-public interface IAccountStageViewModel
-{
-    string Username { get; set; }
-    string Password { get; set; }
-    bool RequireWifi { get; set; }
-    string Locale { get; set; }
-    string GeoId { get; set; }
-    string TimeZone { get; set; }
-    bool LocationServices { get; set; }
-    IRelayCommand UseBuildMachineDmaCommand { get; }
-    StageStatusViewModel Status { get; }
-}
-
-internal sealed partial class AccountStageViewModel : ObservableObject, IAccountStageViewModel
+public sealed partial class AccountStageViewModel : ObservableObject
 {
     private readonly Action _draftChanged;
 

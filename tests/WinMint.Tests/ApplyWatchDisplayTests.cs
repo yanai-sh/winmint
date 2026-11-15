@@ -6,6 +6,16 @@ namespace WinMint.Tests;
 public class ApplyWatchDisplayTests
 {
     [Fact]
+    public void FormatAlive_unchanged_seq_is_stale_without_a_clock()
+    {
+        Assert.Equal("alive", Program.FormatAlive(0));
+        Assert.Equal("alive", Program.FormatAlive(Program.StaleAfterUnchangedReads));
+        string stale = Program.FormatAlive(Program.StaleAfterUnchangedReads + 1);
+        Assert.Equal("status stale", stale);
+        Assert.DoesNotContain("alive", stale, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Cells_maps_long_opcode_without_string_split()
     {
         ApplyEvent ev = new(

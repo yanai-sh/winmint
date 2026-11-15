@@ -3,64 +3,75 @@ using WinMint.Orchestrator;
 namespace WinMint.Tests;
 
 /// <summary>
-/// Staging copies the published Supervisor as-is, so a forgotten republish once shipped an ISO whose guest
-/// code predated the tree that built it — an install that fails in ways the source no longer explains.
+/// Staging copies the published Supervisor as-is. The sibling stamp is a hash of guest source, so a
+/// forgotten republish is stale at any mtime and a clock jump is not.
 /// </summary>
 public class SupervisorFreshnessTests : IDisposable
 {
+    /// <summary>One file, <c>WinMint.Provisioning/Program.cs</c> containing <c>stamp</c>. Shared with Test-SourceStamp.ps1.</summary>
+    private const string PinnedDigest = "a628d45f7c32f7f21b081290b3f441b85512d970b677614c6039933f56b0dd21";
+
     private readonly string _root = Directory.CreateTempSubdirectory("winmint-freshness").FullName;
 
     [Fact]
-    public void Source_newer_than_the_publish_is_reported()
+    public void One_file_digest_matches_the_pinned_vector()
     {
-        string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-        string source = Source("Program.cs", at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+        _ = Source("Program.cs", "stamp");
 
-        Failure? stale = ImageServicing.CheckPublishedBinaryFreshness(
-            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning");
+        Assert.Equal(PinnedDigest, ImageServicing.ComputeSourceTreeDigest([SourceRoot]));
+    }
+
+    [Fact]
+    public void Matching_stamp_is_current_at_any_mtime()
+    {
+        string exe = Publish();
+        _ = Source("Program.cs", "stamp", at: DateTime.UtcNow.AddHours(2));
+        File.WriteAllText(exe + ".sha256", PinnedDigest + "\n");
+
+        Assert.Null(Check(exe));
+    }
+
+    [Fact]
+    public void Mismatched_stamp_is_stale()
+    {
+        string exe = Publish();
+        _ = Source("Program.cs", "edited");
+        File.WriteAllText(exe + ".sha256", PinnedDigest);
+
+        Failure? stale = Check(exe);
 
         Assert.NotNull(stale);
         Assert.Equal("hostCompile.supervisor.stale", stale.Value.Code);
-        Assert.Contains(source, stale.Value.Message, StringComparison.Ordinal);
         Assert.Contains("just publish-provisioning", stale.Value.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Publish_newer_than_source_is_current()
+    public void Missing_stamp_while_source_exists_is_stale()
     {
-        string exe = Publish(at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
-        _ = Source("Program.cs", at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        string exe = Publish();
+        _ = Source("Program.cs", "stamp");
 
-        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
-            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
+        Failure? stale = Check(exe);
+
+        Assert.NotNull(stale);
+        Assert.Equal("hostCompile.supervisor.stale", stale.Value.Code);
+        Assert.Contains("no source stamp", stale.Value.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Source_mtime_in_the_future_is_clock_skew_not_stale()
+    public void Build_output_does_not_change_the_digest()
     {
-        DateTime now = DateTime.UtcNow;
-        string exe = Publish(at: now.AddMinutes(-5));
-        _ = Source("Program.cs", at: now.AddHours(2));
+        _ = Source("Program.cs", "stamp");
+        _ = Source(Path.Combine("obj", "Generated.cs"), "generated");
+        _ = Source(Path.Combine("bin", "Debug", "Generated.cs"), "generated");
 
-        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
-            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
-    }
-
-    [Fact]
-    public void Build_output_is_not_mistaken_for_source()
-    {
-        string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-        // obj/ regenerates on every build and would report stale forever.
-        _ = Source(Path.Combine("obj", "Generated.cs"), at: new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
-
-        Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
-            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
+        Assert.Equal(PinnedDigest, ImageServicing.ComputeSourceTreeDigest([SourceRoot]));
     }
 
     [Fact]
     public void Absent_source_cannot_be_checked_and_must_not_block()
     {
-        string exe = Publish(at: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        string exe = Publish();
 
         Assert.Null(ImageServicing.CheckPublishedBinaryFreshness(
             exe, [Path.Combine(_root, "no-such-src")], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
@@ -73,22 +84,29 @@ public class SupervisorFreshnessTests : IDisposable
             null, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning"));
     }
 
-    private string SourceRoot => Path.Combine(_root, "src");
+    private string SourceRoot => Path.Combine(_root, "WinMint.Provisioning");
 
-    private string Publish(DateTime at)
+    private Failure? Check(string exe) =>
+        ImageServicing.CheckPublishedBinaryFreshness(
+            exe, [SourceRoot], "hostCompile.supervisor.stale", "Supervisor", "just publish-provisioning");
+
+    private string Publish()
     {
         string exe = Path.Combine(_root, "WinMint.Provisioning.exe");
         File.WriteAllText(exe, "binary");
-        File.SetLastWriteTimeUtc(exe, at);
         return exe;
     }
 
-    private string Source(string relativePath, DateTime at)
+    private string Source(string relativePath, string text, DateTime? at = null)
     {
         string file = Path.Combine(SourceRoot, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "// code");
-        File.SetLastWriteTimeUtc(file, at);
+        File.WriteAllText(file, text);
+        if (at is { } when)
+        {
+            File.SetLastWriteTimeUtc(file, when);
+        }
+
         return file;
     }
 

@@ -560,10 +560,14 @@ public static partial class BuildPlan
         stages.Add(ServicingOpcode.StampOfflineDefaultUser);
         stages.Add(ServicingOpcode.StageOobeUnattend);
         stages.Add(ServicingOpcode.StampOfflineShell);
-
+        stages.Add(ServicingOpcode.AddQualityUpdates);
         stages.Add(ServicingOpcode.PatchBootWimApply);
         stages.Add(ServicingOpcode.ExportWim);
-        stages.Add(ServicingOpcode.PublishUsbMedia);
+        if (options.IncludeUsbMedia)
+        {
+            stages.Add(ServicingOpcode.PublishUsbMedia);
+        }
+
         stages.Add(ServicingOpcode.BuildIso);
 
         BuildArtifacts artifacts = new(

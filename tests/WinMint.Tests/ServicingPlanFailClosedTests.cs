@@ -290,6 +290,10 @@ public class ServicingPlanFailClosedTests
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Resolve-WinMintMount.ps1"),
             Path.Combine(servicing, "Resolve-WinMintMount.ps1"));
+        ImageServicingTestFakes.StubFakeMountQuery(servicing);
+        File.Copy(
+            Path.Combine(TestRepo.Root, "servicing", "Enable-WinMintStayAwake.ps1"),
+            Path.Combine(servicing, "Enable-WinMintStayAwake.ps1"));
         File.Copy(
             Path.Combine(TestRepo.Root, "servicing", "Invoke-WinMintDism.ps1"),
             Path.Combine(servicing, "Invoke-WinMintDism.ps1"));
@@ -342,6 +346,9 @@ public class ServicingPlanFailClosedTests
 
     private static (int ExitCode, string Output) RunPlan(string work, string? runner = null)
     {
+        // Repo plan hits real DISM before the opcode. The fake root copies that plan and
+        // stubs the mount query so an unelevated gate still sees the failure under test.
+        runner ??= PrepareFakeServicingRoot(work);
         ProcessStartInfo psi = new()
         {
             FileName = "pwsh",
@@ -349,7 +356,7 @@ public class ServicingPlanFailClosedTests
             {
                 "-NoProfile",
                 "-File",
-                runner ?? Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"),
+                runner,
                 "-WorkDirectory",
                 work,
             },

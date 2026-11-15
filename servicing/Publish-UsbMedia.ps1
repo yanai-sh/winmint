@@ -195,7 +195,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     New-Item -ItemType Directory -Force -Path $bootMount | Out-Null
     try {
         $info = Invoke-WinMintDism -ArgumentList @('/English', '/Get-WimInfo', "/WimFile:$bootWim") -Stage 'Get-WimInfo' -PassThruText
-        $indexes = @([regex]::Matches($info, '(?m)^Index : (\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value })
+        $indexes = Get-WinPeWimIndex -Text $info
         if ($indexes.Count -eq 0) { throw 'boot.wim has no indexes' }
 
         foreach ($index in $indexes) {

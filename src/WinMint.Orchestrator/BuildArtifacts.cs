@@ -51,6 +51,9 @@ public sealed record RunOptions
     /// </summary>
     public bool IncludeWslPlatform { get; init; }
 
+    /// <summary>When true, Plan emits PublishUsbMedia. Default false. ISO Apply does not write a receipt.</summary>
+    public bool IncludeUsbMedia { get; init; }
+
     /// <summary>Override embedded package catalog (tests); null uses <see cref="PackageCatalog.Default"/>.</summary>
     public PackageCatalog? PackageCatalog { get; init; }
 }

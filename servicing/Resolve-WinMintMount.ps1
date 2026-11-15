@@ -2,6 +2,7 @@
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'Invoke-WinMintDism.ps1')
+. (Join-Path $PSScriptRoot 'Enable-WinMintStayAwake.ps1')
 
 $script:WinMintImageServicingMutexName = 'Global\WinMint.ImageServicing.v1'
 
@@ -312,6 +313,8 @@ function Resolve-WinMintStaleMount {
         }
 
         $kind = Resolve-WinMintOwnedKind -MountDir $mountDir -InstallMount $installMount -BootMount $bootMount
+        Enable-WinMintStayAwake
+        Write-Host "discard $kind $mountDir"
         $owner = Read-WinMintMountOwner -Kind $kind -ServicingRoot $root
         if ($null -ne $owner -and (Test-WinMintProcessAlive -ProcessId ([int]$owner.processId) -Commands $Commands)) {
             throw 'servicing already active'

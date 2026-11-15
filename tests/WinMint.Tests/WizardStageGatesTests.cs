@@ -9,10 +9,10 @@ public class WizardStageGatesTests
     [Fact]
     public void Stage_views_bind_through_single_digit_interfaces()
     {
-        Assert.InRange(typeof(ISourceStageViewModel).GetProperties().Length, 1, 9);
-        Assert.InRange(typeof(IAccountStageViewModel).GetProperties().Length, 1, 10);
-        Assert.InRange(typeof(ISoftwareStageViewModel).GetProperties().Length, 1, 9);
-        Assert.InRange(typeof(IReviewStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(SourceStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(AccountStageViewModel).GetProperties().Length, 1, 10);
+        Assert.InRange(typeof(SoftwareStageViewModel).GetProperties().Length, 1, 9);
+        Assert.InRange(typeof(ReviewStageViewModel).GetProperties().Length, 1, 10);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class WizardStageGatesTests
             shell.Source.SourceIsoPath = iso;
             shell.Account.Password = "lab-only";
             await shell.ReplanAsync();
-            IReviewStageViewModel review = shell.Review!;
+            ReviewStageViewModel review = shell.Review!;
 
             Task build = shell.BuildCommand.ExecuteAsync(null);
             await enteredApply.Task.WaitAsync(TestContext.Current.CancellationToken);

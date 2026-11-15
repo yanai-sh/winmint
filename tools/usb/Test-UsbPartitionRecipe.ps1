@@ -13,6 +13,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $repo 'servicing\UsbMediaLayout.ps1')
 # 512MB is large enough for Format-Volume -FileSystem FAT32. Production receipts floor the boot partition at 2GB.
 $bootBytes = [long] 512MB
 $imageBytes = $bootBytes + [long] 128MB + [long] 64MB
@@ -22,47 +23,6 @@ $work = Join-Path $tmp 'work'
 $mediaDir = Join-Path $work 'media'
 $image = Join-Path $tmp 'recipe.vhdx'
 $attached = $false
-
-function Invoke-RecipeDiskpart {
-    param([Parameter(Mandatory)] [string[]] $Lines)
-    $scriptPath = Join-Path $tmp ('diskpart-' + [guid]::NewGuid().ToString('N') + '.txt')
-    [IO.File]::WriteAllLines($scriptPath, $Lines, [Text.Encoding]::ASCII)
-    try {
-        $output = & "$env:SystemRoot\System32\diskpart.exe" /s $scriptPath
-        $exit = $LASTEXITCODE
-    }
-    finally {
-        Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
-    }
-    $text = $output -join "`n"
-    if ($exit -ne 0 -or $text -match 'DiskPart has encountered an error') {
-        throw "diskpart failed (${exit}): $text"
-    }
-}
-
-function Resolve-RecipeDiskNumber {
-    param([Parameter(Mandatory)] [string] $ImagePath)
-    $imageFull = [IO.Path]::GetFullPath($ImagePath)
-    $deadline = [Diagnostics.Stopwatch]::StartNew()
-    do {
-        foreach ($disk in @(Get-Disk -ErrorAction Stop)) {
-            $location = [string] $disk.Location
-            if ([string]::IsNullOrWhiteSpace($location)) { continue }
-            if ($location.StartsWith('\\?\')) { $location = $location.Substring(4) }
-            try {
-                $locationFull = [IO.Path]::GetFullPath($location)
-            }
-            catch {
-                continue
-            }
-            if ($locationFull.Equals($imageFull, [StringComparison]::OrdinalIgnoreCase)) {
-                return [int] $disk.Number
-            }
-        }
-        Start-Sleep -Milliseconds 250
-    } while ($deadline.Elapsed.TotalSeconds -lt 15)
-    throw 'Mounted recipe VHD has no disk number'
-}
 
 try {
     New-Item -ItemType Directory -Force -Path (Join-Path $mediaDir 'efi\boot') | Out-Null
@@ -74,7 +34,6 @@ try {
     $receiptPath = Join-Path $work 'usb-media.json'
     $sourceFile = Join-Path $mediaDir 'efi\boot\bootaa64.efi'
     $image = Join-Path $tmp 'recipe.vhdx'
-    . (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
 
     $receipt = [pscustomobject]@{
         Path = $receiptPath
@@ -95,19 +54,21 @@ try {
     }
 
     $imageMb = [int] ($imageBytes / 1MB)
-    Invoke-RecipeDiskpart @(
+    Invoke-WinMintUsbDiskpart @(
         "create vdisk file=`"$image`" maximum=$imageMb type=expandable",
         "select vdisk file=`"$image`"",
         'attach vdisk'
     )
     $attached = $true
-    $diskNumber = Resolve-RecipeDiskNumber -ImagePath $image
+    $diskNumber = Resolve-WinMintUsbAttachedDiskNumber -ImagePath $image
     $recipeDisk = Get-Disk -Number $diskNumber -ErrorAction Stop
     if ($recipeDisk.IsBoot -or $recipeDisk.IsSystem) {
         throw "Refusing to initialize boot/system disk $diskNumber"
     }
     Set-Disk -Number $diskNumber -IsOffline $false -ErrorAction Stop
     Set-Disk -Number $diskNumber -IsReadOnly $false -ErrorAction Stop
+    $ready = Get-Disk -Number $diskNumber -ErrorAction Stop
+    Assert-WinMintUsbLayoutDisk -Identity $ready -RequiredDiskBytes $imageBytes
     Write-WinMintUsbPartitionContent -DiskNumber $diskNumber -MediaDir $mediaDir -Receipt $receipt | Out-Null
 
     $diskAfter = Get-Disk -Number $diskNumber -ErrorAction Stop
@@ -121,7 +82,7 @@ try {
 finally {
     if ($attached) {
         try {
-            Invoke-RecipeDiskpart @(
+            Invoke-WinMintUsbDiskpart @(
                 "select vdisk file=`"$image`"",
                 'detach vdisk'
             )
