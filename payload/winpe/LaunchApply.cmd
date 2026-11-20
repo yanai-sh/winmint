@@ -54,6 +54,11 @@ if exist "%INSTALL%:\winmint-target-disk.txt" (
 )
 set TARGET=
 set EXTRA=
+call :winmint_bus_types
+if defined WINMINT_BUS_FAIL (
+  echo WinMint: could not read disk bus types
+  exit /b 1
+)
 > "%WORK%\listdisk.txt" (
   echo list disk
   echo exit
@@ -327,11 +332,80 @@ for /f "usebackq tokens=1,2,3" %%a in ("%WORK%\d%N%.txt") do if /i "%%a"=="Type"
 if defined ISUSB goto :eof
 if defined BOOTDISK if "%N%"=="%BOOTDISK%" goto :eof
 if defined PAYLOADDISK if "%N%"=="%PAYLOADDISK%" goto :eof
+set BUSTYPE=
+if defined WINMINT_BUS_READY if exist "%WORK%\buses.txt" (
+  for /f "usebackq tokens=1,2" %%a in ("%WORK%\buses.txt") do if "%%a"=="%N%" set BUSTYPE=%%b
+  if not defined BUSTYPE goto :eof
+)
+if /i "%BUSTYPE%"=="USB" goto :eof
+if /i "%BUSTYPE%"=="SD" goto :eof
+if /i "%BUSTYPE%"=="MMC" goto :eof
+if /i "%BUSTYPE%"=="Virtual" goto :eof
+if /i "%BUSTYPE%"=="FileBackedVirtual" goto :eof
 if defined OVERRIDE (
-  %SystemRoot%\System32\findstr.exe /i /c:"%OVERRIDE%" "%WORK%\d%N%.txt" >nul
-  if errorlevel 1 goto :eof
+  set HIT=
+  for /f "usebackq delims=" %%l in ("%WORK%\d%N%.txt") do if not defined HIT call :winmint_text_has "%%l"
+  if not defined HIT goto :eof
 )
 if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
+goto :eof
+
+rem STORAGE_BUS_TYPE from WinMintApply.exe. A failed query refuses before any disk is cleaned.
+:winmint_bus_types
+set WINMINT_BUS_READY=
+set WINMINT_BUS_FAIL=
+"%~dp0WinMintApply.exe" --bus-types "%WORK%\buses.txt"
+if errorlevel 1 set WINMINT_BUS_FAIL=1
+if not defined WINMINT_BUS_FAIL set WINMINT_BUS_READY=1
+goto :eof
+
+rem Case-insensitive substring. The override path cannot call findstr.
+:winmint_text_has
+set "WINMINT_HAY=%~1"
+if not defined WINMINT_HAY goto :eof
+if not defined OVERRIDE goto :eof
+call :winmint_fold WINMINT_HAY
+set "WINMINT_NEED=%OVERRIDE%"
+call :winmint_fold WINMINT_NEED
+call set "WINMINT_FOLDED=%%WINMINT_HAY:%WINMINT_NEED%=%%"
+if not "%WINMINT_FOLDED%"=="%WINMINT_HAY%" set HIT=1
+goto :eof
+
+:winmint_fold
+setlocal EnableExtensions
+set "S="
+call set "S=%%%~1%%"
+for %%a in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do call :winmint_fold_ch %%a
+endlocal & set "%~1=%S%"
+goto :eof
+
+:winmint_fold_ch
+if /i "%~1"=="a" set "S=%S:a=A%"
+if /i "%~1"=="b" set "S=%S:b=B%"
+if /i "%~1"=="c" set "S=%S:c=C%"
+if /i "%~1"=="d" set "S=%S:d=D%"
+if /i "%~1"=="e" set "S=%S:e=E%"
+if /i "%~1"=="f" set "S=%S:f=F%"
+if /i "%~1"=="g" set "S=%S:g=G%"
+if /i "%~1"=="h" set "S=%S:h=H%"
+if /i "%~1"=="i" set "S=%S:i=I%"
+if /i "%~1"=="j" set "S=%S:j=J%"
+if /i "%~1"=="k" set "S=%S:k=K%"
+if /i "%~1"=="l" set "S=%S:l=L%"
+if /i "%~1"=="m" set "S=%S:m=M%"
+if /i "%~1"=="n" set "S=%S:n=N%"
+if /i "%~1"=="o" set "S=%S:o=O%"
+if /i "%~1"=="p" set "S=%S:p=P%"
+if /i "%~1"=="q" set "S=%S:q=Q%"
+if /i "%~1"=="r" set "S=%S:r=R%"
+if /i "%~1"=="s" set "S=%S:s=S%"
+if /i "%~1"=="t" set "S=%S:t=T%"
+if /i "%~1"=="u" set "S=%S:u=U%"
+if /i "%~1"=="v" set "S=%S:v=V%"
+if /i "%~1"=="w" set "S=%S:w=W%"
+if /i "%~1"=="x" set "S=%S:x=X%"
+if /i "%~1"=="y" set "S=%S:y=Y%"
+if /i "%~1"=="z" set "S=%S:z=Z%"
 goto :eof
 
 rem Called from the install retry. Each call is parsed afresh, so BOOTDISK and
