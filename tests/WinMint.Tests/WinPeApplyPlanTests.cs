@@ -147,6 +147,12 @@ public class WinPeApplyPlanTests
         int reagentcAt = payload.IndexOf("/setreimage /path R:\\Recovery\\WindowsRE", StringComparison.Ordinal);
         Assert.True(bootexAt >= 0 && payloadMarkerAt > bootexAt && windowsMarkerAt > bootexAt && reagentcAt > windowsMarkerAt,
             "Both apply markers must be written after bcdboot and before reagentc.");
+        Assert.Contains("--bus-types", payload, StringComparison.Ordinal);
+        Assert.Contains("if /i \"%BUSTYPE%\"==\"USB\"", payload, StringComparison.Ordinal);
+        Assert.Contains("if /i \"%BUSTYPE%\"==\"SD\"", payload, StringComparison.Ordinal);
+        Assert.Contains("if /i \"%BUSTYPE%\"==\"MMC\"", payload, StringComparison.Ordinal);
+        Assert.Contains("if /i \"%BUSTYPE%\"==\"Virtual\"", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("findstr.exe", payload, StringComparison.OrdinalIgnoreCase);
 
         foreach (string reader in new[] { patcher, gate })
         {

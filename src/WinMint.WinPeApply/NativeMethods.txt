@@ -45,3 +45,7 @@ CreateCompatibleDC
 CreateCompatibleBitmap
 DeleteDC
 GetPixel
+CreateFile
+DeviceIoControl
+STORAGE_BUS_TYPE
+IOCTL_STORAGE_QUERY_PROPERTY
