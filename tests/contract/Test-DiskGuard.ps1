@@ -35,7 +35,9 @@ $harness = @('@echo off', 'setlocal EnableExtensions', 'set INSTALL=Z') +
         else { $_ } }) +
     @('echo RESULT TARGET=%TARGET% EXTRA=%EXTRA%', 'exit /b 0', '') +
     ($lines[$sub..($lines.Length - 1)] | ForEach-Object {
-        if ($_ -match 'diskpart /s') { 'rem pre-seeded' } else { $_ } })
+        if ($_ -match 'diskpart /s') { 'rem pre-seeded' }
+        elseif ($_ -match 'WinMintApply.exe') { 'rem pre-seeded' }
+        else { $_ } })
 
 foreach ($danger in 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format') {
     if ($harness -match $danger) { throw "refusing to run: '$danger' leaked into the harness" }
@@ -55,7 +57,8 @@ function Assert-Case {
         [string] $Override,
         [string] $Expect,
         [object] $BootDisk = '--unset--',
-        [object] $PayloadDisk = '--unset--'
+        [object] $PayloadDisk = '--unset--',
+        [hashtable] $Buses
     )
 
     Remove-Item "$work\*" -Force -ErrorAction SilentlyContinue
@@ -69,6 +72,10 @@ function Assert-Case {
     }
     [IO.File]::WriteAllText("$work\disks.txt", $list)
     if ($Override) { [IO.File]::WriteAllText('Z:\winmint-target-disk.txt', $Override) }
+    if ($null -ne $Buses) {
+        $busLines = foreach ($key in ($Buses.Keys | Sort-Object { [int]$_ })) { "$key $($Buses[$key])" }
+        [IO.File]::WriteAllText("$work\buses.txt", (($busLines -join "`r`n") + "`r`n"))
+    }
 
     $sets = @()
     if ($BootDisk -cne '--unset--') { $sets += "set BOOTDISK=$BootDisk" }
@@ -104,6 +111,13 @@ try {
     Assert-Case 'override cannot select the boot disk' @(@('NVMe', 'HFS001'), @('NVMe', 'Samsung')) 'HFS001' 'no fixed disk' -BootDisk '0' -PayloadDisk '0'
     Assert-Case 'override still selects the other disk' @(@('NVMe', 'Samsung'), @('NVMe', 'HFS001')) 'HFS001' 'TARGET=1 EXTRA=' -BootDisk '0' -PayloadDisk '0'
     Assert-Case 'tag payload disk is not the target' @(@('SCSI', 'Stick'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -PayloadDisk '0'
+    # Bus type, not the diskpart Type word. A SCSI line whose bus is USB is still the stick.
+    Assert-Case 'SCSI type with a USB bus is not the target' @(@('SCSI', 'Dock'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -Buses @{ 0 = 'USB'; 1 = 'NVMe' }
+    Assert-Case 'SD bus is not the target' @(@('SCSI', 'Card'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -Buses @{ 0 = 'SD'; 1 = 'NVMe' }
+    Assert-Case 'MMC bus is not the target' @(@('SCSI', 'Card'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -Buses @{ 0 = 'MMC'; 1 = 'NVMe' }
+    Assert-Case 'Virtual bus is not the target' @(@('SCSI', 'VHD'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -Buses @{ 0 = 'Virtual'; 1 = 'NVMe' }
+    Assert-Case 'single NVMe bus stays the target' @(, @('NVMe', 'HFS001')) '' 'TARGET=0 EXTRA=' -Buses @{ 0 = 'NVMe' }
+    Assert-Case 'override cannot select a USB bus' @(@('NVMe', 'HFS001'), @('SCSI', 'Samsung Dock')) 'Samsung' 'no fixed disk' -Buses @{ 0 = 'NVMe'; 1 = 'USB' }
 }
 finally {
     & subst Z: /D 2>&1 | Out-Null

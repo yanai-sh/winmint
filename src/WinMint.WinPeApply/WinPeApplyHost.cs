@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace WinMint.WinPeApply;
 
@@ -15,9 +16,16 @@ internal static class WinPeApplyHost
     internal const string LaunchName = "LaunchApply.cmd";
     private const string QuickEditSkip = "WINMINT_QE";
 
-    private static int Main()
+    private static int Main(string[] args)
     {
         ApplyBootSplash.EnablePerMonitorV2();
+        // winpeshl cannot pass arguments. LaunchApply calls this mode itself before it chooses a disk.
+        if (args.Length == 2 && string.Equals(args[0], "--bus-types", StringComparison.Ordinal))
+        {
+            File.WriteAllText(args[1], DiskBusList.Render(DiskBusList.Query()), Encoding.ASCII);
+            return 0;
+        }
+
         return Run(AppContext.BaseDirectory, holdFailureConsole: true);
     }
 
