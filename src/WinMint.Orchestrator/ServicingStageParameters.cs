@@ -90,7 +90,8 @@ public sealed record InjectDriversParameters(
     string DeviceId,
     string DetailsUrl,
     string ExpectedFileNameRegex,
-    string Lane);
+    string Lane,
+    string InstallDriverSet);
 
 public sealed record ExportWimParameters(
     string MountDir,

@@ -37,6 +37,7 @@ public class DriverServicingTests
                 s => s.Opcode == ServicingOpcode.InjectDrivers);
             Assert.Equal("surface-laptop-7", inject.Parameters[StageParams.DeviceId]);
             Assert.Equal("Test", inject.Parameters[StageParams.Lane]);
+            Assert.Equal("Boot", inject.Parameters[StageParams.InstallDriverSet]);
             Assert.Equal(ImageServicing.HostMountDir, inject.Parameters[StageParams.MountDir]);
             Assert.Equal(work, inject.Parameters[StageParams.WorkDirectory]);
             Assert.True(inject.Parameters.ContainsKey(StageParams.MediaDir));
