@@ -8,7 +8,7 @@ function Read-RepoText([string] $RelativePath) {
 }
 
 $letters = 'C D E F G H I J K L M N O P Q R S T U V W Y Z'
-$assign = 'if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set INSTALL=%%d'
+$assign = 'if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim call :winmint_accept_install %%d'
 
 foreach ($relative in @('payload/winpe/LaunchApply.cmd')) {
     $text = Read-RepoText $relative
@@ -31,22 +31,25 @@ foreach ($relative in @('payload/winpe/LaunchApply.cmd')) {
         throw "$relative must not include X in the letter list"
     }
 
-    $sets = @($lines | Where-Object { $_ -match 'set INSTALL=%%d' })
+    $sets = @($lines | Where-Object { $_ -match 'call :winmint_accept_install %%d' })
     if ($sets.Count -ne 1) {
-        throw "$relative must assign INSTALL from the drive walk once"
+        throw "$relative must accept an install volume from the drive walk once"
     }
     $setLine = $sets[0].Trim()
     if ($setLine -ne $assign) {
         throw "$relative must accept a letter only when usb-media.json and sources\install.wim both exist, and must not overwrite INSTALL: $setLine"
+    }
+    if ($text -match 'set INSTALL=%%d') {
+        throw "$relative must not set INSTALL from the drive walk; :winmint_accept_install checks the boot disk first"
     }
     $existChecks = [regex]::Matches($setLine, 'if exist ')
     if ($existChecks.Count -ne 2 -or $setLine.IndexOf('if exist %%d:\usb-media.json', [StringComparison]::Ordinal) -lt 0 -or $setLine.IndexOf('if exist %%d:\sources\install.wim', [StringComparison]::Ordinal) -lt 0) {
         throw "$relative must put both if exist checks on the set INSTALL line"
     }
     $wimAt = $setLine.IndexOf('if exist %%d:\sources\install.wim', [StringComparison]::Ordinal)
-    $setAt = $setLine.IndexOf('set INSTALL=%%d', [StringComparison]::Ordinal)
+    $setAt = $setLine.IndexOf('call :winmint_accept_install %%d', [StringComparison]::Ordinal)
     if ($wimAt -lt 0 -or $setAt -lt $wimAt) {
-        throw "$relative must not set INSTALL from install.wim alone"
+        throw "$relative must not accept a letter from install.wim alone"
     }
     if ($setLine -notmatch 'if not defined INSTALL') {
         throw "$relative must guard set INSTALL with if not defined INSTALL"

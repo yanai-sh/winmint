@@ -78,6 +78,15 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch 'winmint_pick') {
             $defects += 'LaunchApply.cmd predates the target-disk guard (no winmint_pick): it would erase disk 0'
         }
+        # The stick is the volume WinPE booted from, not a diskpart Type line that says USB.
+        # The boot-disk subroutine is defined below `clean`; the call that runs first is what matters.
+        $findAt = $body.IndexOf('call :winmint_find_install')
+        $bootCleanAt = $body.IndexOf('echo clean')
+        if ($body -notmatch 'PEBootRamdiskSourceDrive' -or $body -notmatch 'call :winmint_boot_disk' -or
+            $body -notmatch 'if "%N%"=="%BOOTDISK%"' -or
+            $findAt -lt 0 -or $bootCleanAt -lt 0 -or $findAt -ge $bootCleanAt) {
+            $defects += 'LaunchApply.cmd must resolve PEBootRamdiskSourceDrive and skip that disk before diskpart clean'
+        }
         # HKCU\Console\QuickEdit is read when the console is created. A Hyper-V click in Select Mode
         # pauses DISM until another click/Enter; media without this line still has that stall.
         if ($body -notmatch 'reg add HKCU\\Console /v QuickEdit /t REG_DWORD /d 0 /f') {
