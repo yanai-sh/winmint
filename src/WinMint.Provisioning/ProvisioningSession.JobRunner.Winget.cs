@@ -295,7 +295,7 @@ internal static partial class ProvisioningJobRunner
         string wingetExe,
         CancellationToken ct)
     {
-        string importPath = BundleLoader.DefaultGuestWingetImportPath;
+        string importPath = env.GuestWingetImportPath ?? BundleLoader.DefaultGuestWingetImportPath;
         IReadOnlyList<WingetListedPackage> packages;
         try
         {

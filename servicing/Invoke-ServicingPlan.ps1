@@ -20,6 +20,7 @@ $failurePath = $null
 $stagesPath = $null
 $currentStage = 'idle'
 $currentLog = ''
+$applyStatusSeq = 0
 function Invoke-WinMintLoggedKernel {
     param(
         [Parameter(Mandatory)] [string] $Path,
@@ -56,7 +57,7 @@ function Invoke-WinMintLoggedKernel {
                 $quiet.Restart()
             }
             if ($quiet.Elapsed.TotalSeconds -ge $QuietSeconds) {
-                # Heartbeat → stage .log + Write-Progress only (not apply-events.jsonl).
+                # Heartbeat → stage .log + console. Not apply-events.jsonl.
                 Write-WinMintHostHeartbeat -Opcode $Opcode -ElapsedSeconds ([int]$phase.Elapsed.TotalSeconds) -LogWriter $writer
                 $quiet.Restart()
             }
@@ -83,8 +84,9 @@ function Write-ApplyStatus {
     param([string] $Stage, [string] $Log = '')
     $script:currentStage = $Stage
     if ($Log) { $script:currentLog = $Log }
+    $script:applyStatusSeq++
     @(
-        "updated=$([datetime]::UtcNow.ToString('o'))"
+        "seq=$script:applyStatusSeq"
         "stage=$Stage"
         "log=$script:currentLog"
     ) | Set-Content -LiteralPath $statusPath -Encoding utf8
@@ -301,6 +303,7 @@ $servicingLock = $null
 $script:phaseTimings = @{}
 $script:recoveryAction = 'none'
 try {
+    Enable-WinMintStayAwake
     $failurePath = Join-Path $WorkDirectory 'failure.json'
     $statusPath = Join-Path $WorkDirectory 'apply-status.txt'
     $evidencePath = Join-Path $WorkDirectory 'evidence.json'
@@ -407,6 +410,7 @@ catch {
 finally {
     if ($failed -and $null -ne $servicingLock) { Clear-LeftoverMount }
     Exit-WinMintImageServicingLock $servicingLock
+    Disable-WinMintStayAwake
 }
 
 if ($failed) {

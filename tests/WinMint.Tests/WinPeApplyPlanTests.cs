@@ -32,9 +32,9 @@ public class WinPeApplyPlanTests
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
+                ServicingOpcode.AddQualityUpdates,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
-                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages);
@@ -44,7 +44,9 @@ public class WinPeApplyPlanTests
     public async Task Apply_materializes_winpe_opcode_params()
     {
         Profile profile = ParseProfile();
-        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(profile);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(
+            profile,
+            new HostComposeOptions(IncludeUsbMedia: true));
         Assert.True(host.IsOk, host.IsOk ? null : host.Error.Message);
 
         string work = NewTempDir();
@@ -124,6 +126,12 @@ public class WinPeApplyPlanTests
         Assert.DoesNotContain("setup.exe", payload, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/legacy", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("select disk 0", payload, StringComparison.Ordinal);
+        Assert.Contains("PEBootRamdiskSourceDrive", payload, StringComparison.Ordinal);
+        Assert.Contains("if \"%N%\"==\"%BOOTDISK%\"", payload, StringComparison.Ordinal);
+        Assert.True(
+            payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal)
+                < payload.IndexOf("echo clean", StringComparison.Ordinal),
+            "The WinPE boot disk must be resolved before diskpart clean.");
 
         foreach (string reader in new[] { patcher, gate })
         {

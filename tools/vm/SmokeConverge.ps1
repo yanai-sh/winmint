@@ -132,6 +132,28 @@ function Get-SmokeNicReconnectDecision {
     return 'hold'
 }
 
+function Test-SmokeScratchWorkDirCommandLine {
+    <#
+    .SYNOPSIS
+      Pure concurrent-workdir match. smoke-status.json is not an input.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Dir,
+        [AllowEmptyString()][string] $ProcessName = '',
+        [AllowEmptyString()][string] $CommandLine = ''
+    )
+    if ($ProcessName -notmatch '^(WinMint\.Cli|dism|pwsh)\.exe$') { return $false }
+    if ([string]::IsNullOrWhiteSpace($CommandLine)) { return $false }
+    if ($CommandLine -notmatch 'WinMint\.Cli|Invoke-ServicingPlan|dism(\.exe)?') { return $false }
+    $dirFull = [IO.Path]::GetFullPath($Dir).TrimEnd('\')
+    $leaf = Split-Path -Leaf $dirFull
+    if ($CommandLine.IndexOf($dirFull, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+    foreach ($rel in @(".scratch\$leaf", ".scratch/$leaf")) {
+        if ($CommandLine.IndexOf($rel, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+    }
+    return $false
+}
+
 function New-SmokeOfflineOobeProfile {
     <#
     .SYNOPSIS
@@ -349,12 +371,6 @@ function Get-SmokeSuspendVmDecision {
     return 'shutdown'
 }
 
-function Get-SmokeWatcherSpawnDecision {
-    param([bool] $MarkerPidAlive)
-    if ($MarkerPidAlive) { return 'skip' }
-    return 'spawn'
-}
-
 function Get-SmokeWaitPhaseSticky {
     <#
     .SYNOPSIS
@@ -398,6 +414,7 @@ function Get-SmokeWaitTick {
     <#
     .SYNOPSIS
       One Smoke wait poll: snapshot in, actions out. Pure — no Hyper-V.
+      NicAttach (connect|defer) and NicReconnect (connect|hold|skip) are on the same tick.
     #>
     param([Parameter(Mandatory)] $Snap)
 
@@ -426,6 +443,10 @@ function Get-SmokeWaitTick {
         EmptyVhdFailAfterSeconds  = 480
         NudgeElapsedMinutes       = 0.0
         HalfStallShot             = $false
+        OnlineOobe                = $false
+        NicConnected              = $false
+        PlanRequiresNetwork       = $false
+        GuestUpStickySeconds      = 0
     }
     foreach ($p in $Snap.PSObject.Properties) {
         $d[$p.Name] = $p.Value
@@ -436,6 +457,20 @@ function Get-SmokeWaitTick {
     $vhdHasImage = if ($null -ne $d.VhdHasImage) { [bool]$d.VhdHasImage } else { $vhdBytes -ge 1GB }
     $hb = [bool]$d.HeartbeatOk
     $diskPreferred = [bool]$d.DiskBootPreferred
+    # Arming sticky restarts the defer clock at 0 — the loop's stopwatch starts after this tick.
+    $nicActions = {
+        param([bool] $Sticky, [int] $Seconds)
+        [pscustomobject]@{
+            Attach    = (Get-SmokeNicAttachAtCreateDecision -OnlineOobe:([bool]$d.OnlineOobe) `
+                    -PlanRequiresNetwork:([bool]$d.PlanRequiresNetwork))
+            Reconnect = (Get-SmokeNicReconnectDecision -OnlineOobe:([bool]$d.OnlineOobe) `
+                    -AlreadyConnected:([bool]$d.NicConnected) `
+                    -SupervisorRunning:([bool]$d.SupervisorRunning) `
+                    -GuestUpSticky:$Sticky -GuestUpStickySeconds $Seconds `
+                    -PlanRequiresNetwork:([bool]$d.PlanRequiresNetwork))
+        }
+    }
+    $nicEarly = & $nicActions ([bool]$d.GuestUpSticky) ([int]$d.GuestUpStickySeconds)
 
     if ($vmState -notin @('Running', 'Starting', 'Stopping', 'Off')) {
         return [pscustomobject]@{
@@ -455,6 +490,8 @@ function Get-SmokeWaitTick {
             HostLine               = "VM $vmState"
             FailReason             = 'UNEXPECTED'
             FailMessage            = "VM in unexpected state: $vmState"
+            NicAttach              = [string]$nicEarly.Attach
+            NicReconnect           = [string]$nicEarly.Reconnect
         }
     }
 
@@ -506,6 +543,10 @@ function Get-SmokeWaitTick {
         -HeartbeatOk:$hb -GuestUpSticky ([bool]$d.GuestUpSticky) `
         -ConsecutiveHeartbeatOk ([int]$d.ConsecutiveHeartbeatOk)
     $phase = [string]$phaseRes.Phase
+    $stickyNow = [bool]$phaseRes.GuestUpSticky
+    $guestUpSecs = [int]$d.GuestUpStickySeconds
+    if ($stickyNow -and -not [bool]$d.GuestUpSticky) { $guestUpSecs = 0 }
+    $nic = & $nicActions $stickyNow $guestUpSecs
     $vhdMb = [int][math]::Round($vhdBytes / 1MB)
     $failReason = $null
     $failMessage = $null
@@ -567,6 +608,8 @@ function Get-SmokeWaitTick {
         HostLine               = $hostLine
         FailReason             = $failReason
         FailMessage            = $failMessage
+        NicAttach              = [string]$nic.Attach
+        NicReconnect           = [string]$nic.Reconnect
     }
 }
 

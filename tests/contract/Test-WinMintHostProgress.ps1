@@ -91,7 +91,7 @@ if ($kernelText -notmatch 'kernel-line') { throw 'logged kernel dropped stdout' 
 if ($kernelText -notmatch 'kernel-host') { throw 'logged kernel dropped host line' }
 if ($kernelText -match [regex]::Escape($sampleBar)) { throw 'logged kernel must not tee DISM progress bars' }
 if ($kernelText -notmatch 'ProbeOp running') { throw 'silent kernel produced no heartbeat' }
-if ($plan -notmatch "updated=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-status schema keys changed' }
+if ($plan -notmatch "seq=.*`r?`n.*stage=.*`r?`n.*log=") { throw 'apply-status schema keys changed' }
 if ($plan -match "Resolve-KernelScript.*Write-WinMintHostProgress") { throw 'helper must not be an opcode kernel' }
 
 $quality = Get-Content -LiteralPath (Join-Path $repo 'servicing/Add-QualityUpdates.ps1') -Raw -Encoding utf8
@@ -230,7 +230,7 @@ try {
     if ($checkDash -match '12:00:00') { throw 'check layout must omit clock unless passed' }
 
     $applyTmp = Join-Path ([IO.Path]::GetTempPath()) ('apply-status-' + [guid]::NewGuid().ToString('N') + '.txt')
-    Set-Content -LiteralPath $applyTmp -Value "updated=2026-01-01T00:00:00Z`nstage=AddQualityUpdates`nlog=C:\logs\09.log" -Encoding utf8
+    Set-Content -LiteralPath $applyTmp -Value "seq=9`nstage=AddQualityUpdates`nlog=C:\logs\09.log" -Encoding utf8
     $snap = Read-WinMintApplyStatus -Path $applyTmp
     if ($snap.Stage -cne 'AddQualityUpdates') { throw 'Read-WinMintApplyStatus missed stage' }
     if ($snap.Log -cne 'C:\logs\09.log') { throw 'Read-WinMintApplyStatus missed log' }

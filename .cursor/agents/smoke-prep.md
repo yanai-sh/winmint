@@ -31,7 +31,7 @@ You are the **Smoke preflight** agent for WinMint (SL7). Make the host safe for 
 1. **Repo** — `git status -sb`; note HEAD short SHA. Dirty product tree → warn human (Smoke should certify a SHA).
 2. **Password** — `.scratch/sl7.password` exists, 7 bytes, trims to `winmint`, no trailing newline. Fix only if human asked; otherwise fail closed.
 3. **ISO** — path from `tests/fixtures/maintainer-host.json` `sourceIso.path` exists.
-4. **Publish** — `just publish-provisioning` (wipes + rebuilds `artifacts/provisioning` and `artifacts/winpe-apply`). Required when Provisioning/WinPeApply sources are newer than those artifacts, and before any “final” smoke.
+4. **Publish** — `just publish-provisioning` (wipes, rebuilds, and writes the source stamp beside `artifacts/provisioning` and `artifacts/winpe-apply`). Required when that stamp is missing or Apply would report the publish stale, and before any final smoke.
 5. **Orphans** — if Watch/vmconnect/smoke-pwsh orphans exist, invoke or perform the same safe reaps as `smoke-cleanup` first.
 6. **Live guard** — if `.scratch/smoke/smoke-status.json` is non-terminal (`apply`/`wait`/`assert`) **and** waiter alive → **blocked** (do not Remove-VM / wipe workdir).
 7. **Fresh workdir** — default Work `.scratch/smoke`:

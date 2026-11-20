@@ -91,25 +91,94 @@ if ($kernelAt -lt 0) { throw 'kernel entry missing' }
 $kernel = $publishText.Substring($kernelAt)
 $helperAt = $publishText.IndexOf('Invoke-WinMintDism.ps1', [StringComparison]::Ordinal)
 if ($helperAt -lt $kernelAt) { throw 'Invoke-WinMintDism.ps1 must be dot-sourced from the kernel entry only' }
-$buildAt = $kernel.IndexOf('ConvertTo-WinMintUsbMediaReceipt', [StringComparison]::Ordinal)
-$defectAt = $kernel.IndexOf('Get-WinPeApplyDefect', [StringComparison]::Ordinal)
-$receiptPathAt = $kernel.IndexOf('UsbMediaReceiptPath', [StringComparison]::Ordinal)
-$setContentAt = $kernel.IndexOf('Set-Content', [StringComparison]::Ordinal)
-$digestAt = $kernel.IndexOf('Save-WinMintDigestMap -WorkDirectory', [StringComparison]::Ordinal)
-if ($buildAt -lt 0 -or $defectAt -lt 0 -or $receiptPathAt -lt 0 -or $setContentAt -lt 0 -or $digestAt -lt 0) {
-    throw 'kernel must build the receipt, check boot.wim, then write usb-media.json'
-}
-if ($buildAt -ge $defectAt -or $defectAt -ge $receiptPathAt -or $defectAt -ge $setContentAt -or $setContentAt -ge $digestAt) {
-    throw 'Get-WinPeApplyDefect must run after the receipt is built and before usb-media.json is written'
-}
-if ($kernel -notmatch 'foreach\s*\(\s*\$index\s+in\s+\$indexes\s*\)') {
-    throw 'kernel must check every boot.wim index'
-}
-if ($kernel -notmatch 'boot\.wim has no indexes') {
-    throw 'kernel must throw when Get-WimInfo reports no indexes'
-}
 if ($kernel -match '@\(\s*Get-WinPeApplyDefect') {
     throw 'kernel must assign Get-WinPeApplyDefect directly; @() wraps the returned string[] and -join prints System.String[]'
+}
+$staticText = Get-Content -LiteralPath (Join-Path $repo 'tools\usb\Test-UsbMediaArtifact.ps1') -Raw
+foreach ($caller in @(
+        @{ Name = 'publish kernel'; Text = $kernel },
+        @{ Name = 'USB static verifier'; Text = $staticText })) {
+    if ($caller.Text -notmatch 'Get-WinPeWimIndex\b') {
+        throw "$($caller.Name) must call Get-WinPeWimIndex"
+    }
+    if ($caller.Text -notmatch 'boot\.wim has no indexes') {
+        throw "$($caller.Name) must throw when the parser returns no indexes"
+    }
+}
+
+function Assert-WimIndex {
+    param($Actual, [int[]] $Expected, [string] $Label)
+    if ($Actual -isnot [System.Array]) { throw "$Label did not return a list" }
+    if ($Actual.Count -ne $Expected.Count) {
+        throw "$Label count $($Actual.Count) expected $($Expected.Count)"
+    }
+    for ($i = 0; $i -lt $Expected.Count; $i++) {
+        if ([int] $Actual[$i] -ne $Expected[$i]) {
+            throw "$Label[$i] is $($Actual[$i]), expected $($Expected[$i])"
+        }
+    }
+}
+
+$dism = @'
+Deployment Image Servicing and Management tool
+Version: 10.0.26100.1
+
+Index : 1
+Name : Windows 11 Home
+Architecture : ARM64
+Edition : Core
+ServicePack Build : 26100
+
+Index : 3
+Name : Windows 11 Pro
+Architecture : ARM64
+Edition : Professional
+Installation : Client
+ProductType : WinNT
+ProductSuite : Terminal Server
+ServicePack Build : 26100
+
+The operation completed successfully.
+'@
+$dismIndexes = Get-WinPeWimIndex -Text $dism
+Assert-WimIndex -Actual $dismIndexes -Expected ([int[]](1, 3)) -Label 'DISM'
+
+# libwim-15.dll prints "Index:                  %d" (18 spaces). The exe header is
+# "Image Count:    %d" and "Boot Index:     %d". Those header fields are not images.
+$wimlib = @(
+    'WIM Information:'
+    'Image Count:' + (' ' * 4) + '2'
+    'Boot Index:' + (' ' * 5) + '3'
+    'Available Images:'
+    'Index:' + (' ' * 18) + '1'
+    'Name:                   Microsoft Windows Setup (arm64)'
+    'Description:            Microsoft Windows Setup (arm64)'
+    'Index:' + (' ' * 18) + '3'
+    'Name:                   Microsoft Windows PE (arm64)'
+    'Description:            Microsoft Windows PE (arm64)'
+) -join "`n"
+$wimlibIndexes = Get-WinPeWimIndex -Text $wimlib
+Assert-WimIndex -Actual $wimlibIndexes -Expected ([int[]](1, 3)) -Label 'wimlib'
+
+$noIndex = @(
+    'WIM Information:'
+    'Image Count:' + (' ' * 4) + '2'
+    'Boot Index:' + (' ' * 5) + '1'
+    'Available Images:'
+) -join "`n"
+$emptyIndexes = Get-WinPeWimIndex -Text $noIndex
+Assert-WimIndex -Actual $emptyIndexes -Expected ([int[]]@()) -Label 'no index lines'
+
+$mount = Join-Path ([IO.Path]::GetTempPath()) ('winmint-apply-defect-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $mount | Out-Null
+try {
+    $defects = Get-WinPeApplyDefect -MountDir $mount -WorkDirectory $mount
+    if ($defects -notcontains 'LaunchApply.cmd missing inside boot.wim') {
+        throw "missing LaunchApply.cmd must be reported: $($defects -join '; ')"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $mount -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Output 'Test-PublishUsbMedia ok'

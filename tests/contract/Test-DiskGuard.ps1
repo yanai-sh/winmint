@@ -49,7 +49,14 @@ if ($LASTEXITCODE -ne 0) { throw 'cannot map Z: for the override case' }
 
 $failures = @()
 function Assert-Case {
-    param([string] $Name, [object[]] $Disks, [string] $Override, [string] $Expect)
+    param(
+        [string] $Name,
+        [object[]] $Disks,
+        [string] $Override,
+        [string] $Expect,
+        [object] $BootDisk = '--unset--',
+        [object] $PayloadDisk = '--unset--'
+    )
 
     Remove-Item "$work\*" -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $work | Out-Null
@@ -63,7 +70,15 @@ function Assert-Case {
     [IO.File]::WriteAllText("$work\disks.txt", $list)
     if ($Override) { [IO.File]::WriteAllText('Z:\winmint-target-disk.txt', $Override) }
 
-    $out = (& cmd /c $cmdPath) -join ' '
+    $sets = @()
+    if ($BootDisk -cne '--unset--') { $sets += "set BOOTDISK=$BootDisk" }
+    if ($PayloadDisk -cne '--unset--') { $sets += "set PAYLOADDISK=$PayloadDisk" }
+    $invoke = if ($sets.Count -eq 0) {
+        "`"$cmdPath`""
+    } else {
+        ($sets -join '&& ') + "&& call `"$cmdPath`""
+    }
+    $out = (& cmd /c $invoke) -join ' '
     if ($out -notmatch [regex]::Escape($Expect)) {
         $script:failures += "$Name`n    expected: $Expect`n    actual:   $($out -replace '\s+', ' ')"
     }
@@ -82,11 +97,87 @@ try {
     Assert-Case 'override resolves ambiguity' @(@('NVMe', 'HFS001'), @('NVMe', 'Samsung')) 'Samsung' 'TARGET=1 EXTRA='
     Assert-Case 'override matching nothing refuses' @(@('NVMe', 'HFS001'), @('NVMe', 'Samsung')) 'Toshiba' 'no fixed disk'
     Assert-Case 'override cannot select a USB' @(@('NVMe', 'HFS001'), @('USB', 'Samsung BAR')) 'Samsung' 'no fixed disk'
+    # The stick is the boot disk even when diskpart's Type line is SCSI.
+    Assert-Case 'SCSI boot disk is not the target' @(@('SCSI', 'Stick'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -BootDisk '0' -PayloadDisk '0'
+    Assert-Case 'boot disk enumerated second' @(@('NVMe', 'HFS001'), @('SCSI', 'Stick')) '' 'TARGET=0 EXTRA=' -BootDisk '1' -PayloadDisk '1'
+    Assert-Case 'only the boot disk refuses' @(, @('SCSI', 'Stick')) '' 'no fixed disk' -BootDisk '0' -PayloadDisk '0'
+    Assert-Case 'override cannot select the boot disk' @(@('NVMe', 'HFS001'), @('NVMe', 'Samsung')) 'HFS001' 'no fixed disk' -BootDisk '0' -PayloadDisk '0'
+    Assert-Case 'override still selects the other disk' @(@('NVMe', 'Samsung'), @('NVMe', 'HFS001')) 'HFS001' 'TARGET=1 EXTRA=' -BootDisk '0' -PayloadDisk '0'
+    Assert-Case 'tag payload disk is not the target' @(@('SCSI', 'Stick'), @('NVMe', 'HFS001')) '' 'TARGET=1 EXTRA=' -PayloadDisk '0'
 }
 finally {
     & subst Z: /D 2>&1 | Out-Null
     Remove-Item $usb, $work -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $cmdPath -Force -ErrorAction SilentlyContinue
+}
+
+function Get-LabelBody {
+    param([string[]] $Source, [string] $Label)
+    $start = [array]::IndexOf($Source, $Label)
+    if ($start -lt 0) { throw "missing $Label" }
+    $end = $Source.Length - 1
+    for ($i = $start + 1; $i -lt $Source.Length; $i++) {
+        if ($Source[$i] -match '^:[A-Za-z0-9_]+$') { $end = $i - 1; break }
+    }
+    return $Source[$start..$end]
+}
+
+$parseCmd = Join-Path $env:TEMP ('winmint-volparse-' + [guid]::NewGuid().ToString('N') + '.cmd')
+$parseSample = Join-Path $env:TEMP ('winmint-voldetail-' + [guid]::NewGuid().ToString('N') + '.txt')
+$acceptCmd = Join-Path $env:TEMP ('winmint-accept-' + [guid]::NewGuid().ToString('N') + '.cmd')
+try {
+    $parseHarness = @(
+        '@echo off',
+        'setlocal EnableExtensions',
+        'call :winmint_parse_volume_disk "%~1"',
+        'echo VOLDISK=%VOLDISK%',
+        'exit /b 0',
+        ''
+    ) + (Get-LabelBody $lines ':winmint_parse_volume_disk')
+    Set-Content -LiteralPath $parseCmd -Value ($parseHarness -join "`r`n") -Encoding ascii
+    [IO.File]::WriteAllText($parseSample, "  Disk ###  Status         Size     Free     Dyn  Gpt`r`n  --------  -------------  -------  -------  ---  ---`r`n* Disk 2    Online           57 GB      0 B        *`r`n")
+    $parsed = (& cmd /c "`"$parseCmd`" `"$parseSample`"") -join ' '
+    if ($parsed -notmatch 'VOLDISK=2') {
+        $failures += "detail volume star line`n    expected: VOLDISK=2`n    actual:   $parsed"
+    }
+    [IO.File]::WriteAllText($parseSample, "Disk 0    Online`r`n")
+    $parsed = (& cmd /c "`"$parseCmd`" `"$parseSample`"") -join ' '
+    if ($parsed -notmatch 'VOLDISK=0') {
+        $failures += "detail volume plain line`n    expected: VOLDISK=0`n    actual:   $parsed"
+    }
+
+    $acceptHarness = @(
+        '@echo off',
+        'setlocal EnableExtensions',
+        'set BOOTDISK=',
+        'if not "%~1"=="-" set BOOTDISK=%~1',
+        'set FAKEVOL=%~2',
+        'set INSTALL=',
+        'set PAYLOADDISK=',
+        'call :winmint_accept_install Z',
+        'echo INSTALL=%INSTALL%',
+        'echo PAYLOADDISK=%PAYLOADDISK%',
+        'exit /b 0',
+        '',
+        ':winmint_volume_disk',
+        'set VOLDISK=%FAKEVOL%',
+        'goto :eof',
+        ''
+    ) + (Get-LabelBody $lines ':winmint_accept_install')
+    Set-Content -LiteralPath $acceptCmd -Value ($acceptHarness -join "`r`n") -Encoding ascii
+    function Assert-Accept {
+        param([string] $Name, [string] $Boot, [string] $VolumeDisk, [string] $Expect)
+        $actual = (& cmd /c "`"$acceptCmd`" $Boot $VolumeDisk") -join ' '
+        if ($actual -notmatch [regex]::Escape($Expect)) {
+            $script:failures += "$Name`n    expected: $Expect`n    actual:   $actual"
+        }
+    }
+    Assert-Accept 'payload on the boot disk' '1' '1' 'INSTALL=Z PAYLOADDISK=1'
+    Assert-Accept 'payload on another disk is ignored' '1' '2' 'INSTALL= PAYLOADDISK='
+    Assert-Accept 'tag mode keeps the first resolved disk' '-' '3' 'INSTALL=Z PAYLOADDISK=3'
+}
+finally {
+    Remove-Item $parseCmd, $parseSample, $acceptCmd -Force -ErrorAction SilentlyContinue
 }
 
 # The guard only protects a wipe if the pre-wipe gate refuses media that lacks it. Patcher and gate

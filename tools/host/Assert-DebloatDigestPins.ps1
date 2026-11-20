@@ -19,6 +19,34 @@ function Get-WinMintDebloatPinIdsFromStage {
         Where-Object { [string]$_.opcode -eq $Opcode } |
         Select-Object -First 1
     if ($null -eq $stage) { return @() }
+
+    # A present RemoveProvisionedAppx stage with no ids is a broken bind.
+    # Absent opcode stays an empty list (SkipApply may omit the stage).
+    # Capability and optional-feature stages keep the empty-list miss.
+    if ($Opcode -eq 'RemoveProvisionedAppx' -and $PathParam -eq 'packageFamilyNamesPath') {
+        $path = ''
+        $parameters = $stage.parameters
+        if ($null -ne $parameters) {
+            $named = $parameters.PSObject.Properties[$PathParam]
+            if ($null -ne $named -and $null -ne $named.Value) {
+                $path = [string]$named.Value
+            }
+        }
+        if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $shown = if ([string]::IsNullOrWhiteSpace($path)) { '(missing)' } else { $path }
+            throw "packageFamilyNamesPath missing: $shown"
+        }
+        $ids = @(
+            @(Get-Content -LiteralPath $path -Raw -Encoding utf8 | ConvertFrom-Json) |
+                ForEach-Object { [string]$_ } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+        if ($ids.Count -eq 0) {
+            throw "packageFamilyNames.json empty: $path"
+        }
+        return $ids
+    }
+
     $path = [string]$stage.parameters.$PathParam
     if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
         return @()

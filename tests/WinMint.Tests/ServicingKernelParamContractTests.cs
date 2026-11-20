@@ -66,6 +66,53 @@ public class ServicingKernelParamContractTests
         }
     }
 
+    [Fact]
+    public void ResolveKernelScript_maps_every_opcode_to_an_existing_script()
+    {
+        string plan = File.ReadAllText(Path.Combine(TestRepo.Root, "servicing", "Invoke-ServicingPlan.ps1"));
+        int start = plan.IndexOf("function Resolve-KernelScript", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        int open = plan.IndexOf('{', start);
+        int depth = 0;
+        int end = open;
+        for (int i = open; i < plan.Length; i++)
+        {
+            if (plan[i] == '{')
+            {
+                depth++;
+            }
+            else if (plan[i] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    end = i;
+                    break;
+                }
+            }
+        }
+
+        Dictionary<string, string> map = new(StringComparer.Ordinal);
+        foreach (string raw in plan[open..(end + 1)].Split('\n'))
+        {
+            Match hit = Regex.Match(
+                raw,
+                @"^\s*'([^']+)'\s*\{\s*return\s+Join-Path\s+\$scriptRoot\s+'([^'\\/]+\.ps1)'\s*\}",
+                RegexOptions.CultureInvariant);
+            if (hit.Success)
+            {
+                map[hit.Groups[1].Value] = hit.Groups[2].Value;
+            }
+        }
+
+        foreach (ServicingOpcode opcode in Enum.GetValues<ServicingOpcode>())
+        {
+            string name = opcode.ToString();
+            Assert.True(map.TryGetValue(name, out string? file), name);
+            Assert.True(File.Exists(Path.Combine(TestRepo.Root, "servicing", file!)), file);
+        }
+    }
+
     private static BuildArtifacts PlanAllOpcodes()
     {
         Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
@@ -98,7 +145,9 @@ public class ServicingKernelParamContractTests
             }
             """));
         Assert.True(parsed.IsOk, parsed.IsOk ? null : string.Join("; ", parsed.Error.Select(i => i.Message)));
-        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(parsed.Value);
+        Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(
+            parsed.Value,
+            new HostComposeOptions(IncludeUsbMedia: true));
         Assert.True(host.IsOk, host.IsOk ? null : $"{host.Error.Code}: {host.Error.Message}");
         return host.Value.Artifacts;
     }

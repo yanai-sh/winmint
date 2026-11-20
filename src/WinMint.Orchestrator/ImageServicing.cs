@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -136,7 +138,7 @@ public static partial class ImageServicing
     /// finds, so a forgotten republish once shipped an ISO whose guest behaviour silently predated the
     /// tree that built it — the machine then fails in ways the source no longer explains.
     /// </summary>
-    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
+    /// <returns>Null when the publish is current, the exe is absent, or source is absent.</returns>
     public static Failure? CheckSupervisorFreshness() =>
         CheckPublishedBinaryFreshness(
             FindPublishedSupervisor(),
@@ -145,7 +147,7 @@ public static partial class ImageServicing
             "Supervisor",
             "just publish-provisioning");
 
-    /// <returns>Null when the publish is current, absent, or unverifiable.</returns>
+    /// <returns>Null when the publish is current, the exe is absent, or source is absent.</returns>
     public static Failure? CheckWinPeApplyFreshness() =>
         CheckPublishedBinaryFreshness(
             FindPublishedWinPeApply(),
@@ -166,42 +168,70 @@ public static partial class ImageServicing
             return null;
         }
 
-        string? staleSince = sourceRoots
-            .Select(root => FindSourceNewerThan(publishedExe, root))
-            .FirstOrDefault(static hit => hit is not null);
+        List<string> present = [];
+        foreach (string? root in sourceRoots)
+        {
+            if (root is not null && Directory.Exists(root))
+            {
+                present.Add(root);
+            }
+        }
 
-        return staleSince is null
-            ? null
-            : new Failure(
-                code,
-                $"Published {publishedLabel} predates '{staleSince}'. An ISO built now would ship guest code that no longer matches this tree. Run: {remedy}");
-    }
-
-    /// <summary>
-    /// First <c>*.cs</c> under <paramref name="sourceRoot"/> newer than the published binary.
-    /// Null when source is absent — a packaged toolkit ships without <c>src/</c> and cannot check.
-    /// </summary>
-    internal static string? FindSourceNewerThan(string publishedExe, string? sourceRoot)
-    {
-        if (sourceRoot is null || !Directory.Exists(sourceRoot))
+        if (present.Count == 0)
         {
             return null;
         }
 
-        // ponytail: mtime, not content hash — a clock skew or a no-op touch gives a false "stale".
-        // Future source mtimes (clock jumped backward) are skew, not "edited after this publish".
-        // Hash inputs only if that remaining noise (no-op touch in the past) becomes a problem.
-        DateTime published = File.GetLastWriteTimeUtc(publishedExe);
-        DateTime now = DateTime.UtcNow;
-        return Directory
-            .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(static file =>
-                !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .FirstOrDefault(file =>
+        string stampPath = publishedExe + ".sha256";
+        if (!File.Exists(stampPath))
+        {
+            return new Failure(
+                code,
+                $"Published {publishedLabel} has no source stamp beside '{publishedExe}'. An ISO built now would ship guest code that may not match this tree. Run: {remedy}");
+        }
+
+        string expected = File.ReadAllText(stampPath).Trim();
+        string actual = ComputeSourceTreeDigest(present);
+        return string.Equals(expected, actual, StringComparison.Ordinal)
+            ? null
+            : new Failure(
+                code,
+                $"Published {publishedLabel} source stamp does not match this tree. Run: {remedy}");
+    }
+
+    /// <summary>
+    /// SHA-256 of sorted <c>*.cs</c> under the source roots. Path is <c>Project/relative</c> with
+    /// <c>/</c>, then a newline, the file bytes, and a newline. <c>bin</c> and <c>obj</c> are skipped.
+    /// </summary>
+    internal static string ComputeSourceTreeDigest(IEnumerable<string> sourceRoots)
+    {
+        List<(string Path, string Full)> files = [];
+        foreach (string root in sourceRoots)
+        {
+            string project = new DirectoryInfo(root).Name;
+            foreach (string file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             {
-                DateTime source = File.GetLastWriteTimeUtc(file);
-                return source <= now && source > published;
-            });
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+                files.Add(($"{project}/{relative}", file));
+            }
+        }
+
+        files.Sort(static (left, right) => string.CompareOrdinal(left.Path, right.Path));
+        using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach ((string path, string full) in files)
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(path));
+            hash.AppendData("\n"u8);
+            hash.AppendData(File.ReadAllBytes(full));
+            hash.AppendData("\n"u8);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 }

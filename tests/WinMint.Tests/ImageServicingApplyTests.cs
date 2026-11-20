@@ -81,7 +81,6 @@ public class ImageServicingApplyTests
                     ServicingOpcode.AddQualityUpdates,
                     ServicingOpcode.PatchBootWimApply,
                     ServicingOpcode.ExportWim,
-                    ServicingOpcode.PublishUsbMedia,
                     ServicingOpcode.BuildIso,
                 ],
                 runner.Opcodes.ToArray());
@@ -480,7 +479,7 @@ public class ImageServicingApplyTests
     [Fact]
     public async Task Apply_rejects_usb_receipt_changed_after_digest()
     {
-        BuildArtifacts plan = MinimalPlan();
+        BuildArtifacts plan = MinimalPlan(includeUsbMedia: true);
         string work = NewTempDir();
         try
         {
@@ -505,7 +504,9 @@ public class ImageServicingApplyTests
         }
     }
 
-    private static BuildArtifacts MinimalPlan(ImageQualityLane quality = ImageQualityLane.Test)
+    private static BuildArtifacts MinimalPlan(
+        ImageQualityLane quality = ImageQualityLane.Test,
+        bool includeUsbMedia = false)
     {
         Result<Profile, IReadOnlyList<DocumentError>> parsed = BuildPlan.TryParseProfile(Encoding.UTF8.GetBytes($$"""
             {
@@ -529,7 +530,7 @@ public class ImageServicingApplyTests
         Assert.True(parsed.IsOk);
         Result<HostPlan, HostComposeError> host = HostCompile.PlanDocument(
             parsed.Value,
-            new HostComposeOptions(ImageQuality: quality));
+            new HostComposeOptions(ImageQuality: quality, IncludeUsbMedia: includeUsbMedia));
         Assert.True(host.IsOk, host.IsOk ? null : $"{host.Error.Code}: {host.Error.Message}");
         return host.Value.Artifacts;
     }

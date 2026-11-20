@@ -5,26 +5,6 @@ namespace WinMint.Orchestrator;
 
 public static partial class ImageServicing
 {
-    /// <summary>
-    /// Insert Catalog quality before PatchBootWimApply when Plan omitted it (Apply-time only).
-    /// Plan dump stays an empty-param skeleton and never gains this insert.
-    /// </summary>
-    internal static List<ServicingOpcode> WithQualityUpdateOpcode(IReadOnlyList<ServicingOpcode> stages)
-    {
-        ArgumentNullException.ThrowIfNull(stages);
-        List<ServicingOpcode> opcodes = [.. stages];
-        if (!opcodes.Contains(ServicingOpcode.AddQualityUpdates))
-        {
-            int boot = opcodes.IndexOf(ServicingOpcode.PatchBootWimApply);
-            if (boot >= 0)
-            {
-                opcodes.Insert(boot, ServicingOpcode.AddQualityUpdates);
-            }
-        }
-
-        return opcodes;
-    }
-
     /// <summary>Frozen plan + workdir paths → bound servicing stages wire (Apply input).</summary>
     internal static Result<BoundServicingStages, Failure> TryBindServicingStages(
         ServicingStageBindContext ctx)
@@ -43,7 +23,7 @@ public static partial class ImageServicing
         string outputIso = ctx.OutputIso;
         int wimIndex = ctx.WimIndex;
 
-        List<ServicingOpcode> opcodes = WithQualityUpdateOpcode(plan.Stages);
+        List<ServicingOpcode> opcodes = [.. plan.Stages];
         List<ServicingStage> resolved = new(opcodes.Count);
         List<(ServicingOpcode Opcode, JsonObject Parameters)> wire = new(opcodes.Count);
         void Add<T>(ServicingOpcode opcode, T record, JsonTypeInfo<T> typeInfo)

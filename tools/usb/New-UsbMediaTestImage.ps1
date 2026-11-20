@@ -19,10 +19,8 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-# Dot-sourcing binds its parameters in this scope. Resolve first and pass that
-# path through; -WorkDirectory unused would replace the caller's WorkDirectory.
+. (Join-Path $repo 'servicing\UsbMediaLayout.ps1')
 $work = (Resolve-Path -LiteralPath $WorkDirectory).Path
-. (Join-Path $repo 'servicing\Write-UsbMedia.ps1') -WorkDirectory $work -DiskNumber 0
 
 $image = [IO.Path]::GetFullPath($ImagePath)
 if ([IO.Path]::GetExtension($image) -cne '.vhdx') {
@@ -51,47 +49,6 @@ $mediaDir = Join-Path $work 'media'
 Assert-WinMintUsbReceiptSource -MediaDir $mediaDir -Receipt $receipt
 $probeChallenge = [guid]::NewGuid().ToString('N')
 
-function Invoke-ProbeDiskpart {
-    param([Parameter(Mandatory)] [string[]] $Lines)
-    $scriptPath = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-probe-' + [guid]::NewGuid().ToString('N') + '.txt')
-    [IO.File]::WriteAllLines($scriptPath, $Lines, [Text.Encoding]::ASCII)
-    try {
-        $output = & "$env:SystemRoot\System32\diskpart.exe" /s $scriptPath
-        $exit = $LASTEXITCODE
-    }
-    finally {
-        Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
-    }
-    $text = $output -join "`n"
-    if ($exit -ne 0 -or $text -match 'DiskPart has encountered an error') {
-        throw "diskpart failed (${exit}): $text"
-    }
-}
-
-function Resolve-ProbeDiskNumber {
-    param([Parameter(Mandatory)] [string] $ImagePath)
-    $imageFull = [IO.Path]::GetFullPath($ImagePath)
-    $deadline = [Diagnostics.Stopwatch]::StartNew()
-    do {
-        foreach ($disk in @(Get-Disk -ErrorAction Stop)) {
-            $location = [string] $disk.Location
-            if ([string]::IsNullOrWhiteSpace($location)) { continue }
-            if ($location.StartsWith('\\?\')) { $location = $location.Substring(4) }
-            try {
-                $locationFull = [IO.Path]::GetFullPath($location)
-            }
-            catch {
-                continue
-            }
-            if ($locationFull.Equals($imageFull, [StringComparison]::OrdinalIgnoreCase)) {
-                return [int] $disk.Number
-            }
-        }
-        Start-Sleep -Milliseconds 250
-    } while ($deadline.Elapsed.TotalSeconds -lt 15)
-    throw 'Mounted probe VHD has no disk number'
-}
-
 $oneMb = 1MB
 $requiredBytes = [long] $receipt.Document.layout.requiredDiskBytes
 $imageBytes = [long] ([Math]::Ceiling($requiredBytes / [double] $oneMb) * $oneMb)
@@ -99,13 +56,13 @@ $imageMb = [int] ($imageBytes / $oneMb)
 $attached = $false
 $layoutFailed = $false
 try {
-    Invoke-ProbeDiskpart @(
+    Invoke-WinMintUsbDiskpart @(
         "create vdisk file=`"$image`" maximum=$imageMb type=expandable",
         "select vdisk file=`"$image`"",
         'attach vdisk'
     )
     $attached = $true
-    $diskNumber = Resolve-ProbeDiskNumber -ImagePath $image
+    $diskNumber = Resolve-WinMintUsbAttachedDiskNumber -ImagePath $image
     $probeDisk = Get-Disk -Number $diskNumber -ErrorAction Stop
     if ($probeDisk.IsBoot -or $probeDisk.IsSystem) {
         throw "Refusing to initialize boot/system disk $diskNumber"
@@ -121,6 +78,8 @@ try {
     }
     Set-Disk -Number $diskNumber -IsOffline $false -ErrorAction Stop
     Set-Disk -Number $diskNumber -IsReadOnly $false -ErrorAction Stop
+    $ready = Get-Disk -Number $diskNumber -ErrorAction Stop
+    Assert-WinMintUsbLayoutDisk -Identity $ready -RequiredDiskBytes $requiredBytes
     Write-WinMintUsbPartitionContent -DiskNumber $diskNumber -MediaDir $mediaDir -Receipt $receipt -BeforeVerify {
         param($PayloadRoot)
         Set-Content -LiteralPath (Join-Path $PayloadRoot 'winmint-boot-probe.txt') `
@@ -134,7 +93,7 @@ catch {
 finally {
     if ($attached) {
         try {
-            Invoke-ProbeDiskpart @(
+            Invoke-WinMintUsbDiskpart @(
                 "select vdisk file=`"$image`"",
                 'detach vdisk'
             )

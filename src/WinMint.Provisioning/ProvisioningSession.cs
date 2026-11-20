@@ -12,6 +12,12 @@ public static partial class ProvisioningSession
     /// <summary>App Installer / winget package family (Microsoft-documented FirstLogon register target).</summary>
     public const string DesktopAppInstallerFamilyName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
 
+    /// <summary>
+    /// Same boot, same checkpoint phase. The write that saved the phase counts as one.
+    /// Two further starts still resume. The next opens the desktop.
+    /// </summary>
+    public const int MaxSameBootResumes = 3;
+
     /// <summary>Run the FirstLogon Shell tenure for a provisioning bundle against the live guest.</summary>
     public static async Task<SessionResult> RunShellAsync(
         ProvisioningBundle bundle,
@@ -43,7 +49,7 @@ public static partial class ProvisioningSession
         // Bootstrap: in-progress checkpoint + missing/stale heartbeat ⇒ fail-open.
         TenureState tenure = env.Guest.Checkpoints.ReadTenure();
         CheckpointState? storedCheckpoint = env.Guest.Checkpoints.TryReadCheckpoint();
-        if (tenure.CheckpointInProgress && IsStaleHeartbeat(bundle, env, tenure))
+        if (tenure.CheckpointInProgress && IsStaleHeartbeat(env, tenure, storedCheckpoint?.Phase))
         {
             env.Guest.Checkpoints.ClearCheckpoint();
             return await FailOpenAsync(
@@ -68,7 +74,7 @@ public static partial class ProvisioningSession
                 emitted,
                 new SessionStatus(
                     "shell.checkpoint.invalid",
-                    "In-progress checkpoint missing or empty; fail-closed."),
+                    "In-progress checkpoint empty; desktop opened."),
                 dwell: false,
                 firstPaintMs).ConfigureAwait(false);
         }
@@ -81,7 +87,7 @@ public static partial class ProvisioningSession
             jobStartIndex = resumeJobIndex;
         }
 
-        env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+        WriteBootHeartbeat(env, resume?.Phase);
 
         // FirstPaint — opaque frame before any settle work (S3 order; S4 measures latency).
         env.Splash.Show();
@@ -190,7 +196,8 @@ public static partial class ProvisioningSession
                 StartIndex: jobStartIndex,
                 WslMock: new WslMockState(),
                 RecordPhaseQuiet: code => phases.Add(code),
-                PackageJobTimeout: bundle.Policy.PackageJobTimeout);
+                PackageJobTimeout: bundle.Policy.PackageJobTimeout,
+                GuestWingetImportPath: env.GuestWingetImportPath);
             jobs = await ProvisioningJobRunner.Run(bundle.Jobs, runnerEnv, ct)
                 .ConfigureAwait(false);
         }
@@ -239,8 +246,9 @@ public static partial class ProvisioningSession
             }
 
             // Keep Supervisor as Shell — do not unlock.
-            env.Guest.Checkpoints.WriteCheckpoint(new CheckpointState($"jobs:{nextJobIndex}"));
-            env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow());
+            string rebootPhase = $"jobs:{nextJobIndex}";
+            env.Guest.Checkpoints.WriteCheckpoint(new CheckpointState(rebootPhase));
+            WriteBootHeartbeat(env, rebootPhase);
             // Unattend LogonCount=5 is a hard autologon budget; re-arm so NeedsReboot
             // jobs cannot land on a password prompt before the next Shell tenure.
             env.Guest.Winlogon.ReArmAutoLogonCount();
@@ -564,17 +572,51 @@ public static partial class ProvisioningSession
         }
     }
 
-    private static bool IsStaleHeartbeat(
-        ProvisioningBundle bundle,
-        ShellEnvironment env,
-        TenureState tenure)
+    private static void WriteBootHeartbeat(ShellEnvironment env, string? phase)
     {
-        if (tenure.HeartbeatUtc is null)
+        BootTick? boot = env.Guest.ReadBootTick();
+        TenureState prior = env.Guest.Checkpoints.ReadTenure();
+        int? count = boot is null ? null : NextResumeCount(prior, boot.Value, phase);
+        env.Guest.Checkpoints.WriteHeartbeat(env.Time.GetUtcNow(), boot?.BootId, phase, count);
+    }
+
+    private static int NextResumeCount(TenureState prior, BootTick boot, string? phase)
+    {
+        if (prior.BootId == boot.BootId
+            && prior.ResumeCount is int saved
+            && string.Equals(prior.Phase, phase, StringComparison.Ordinal))
+        {
+            return saved + 1;
+        }
+
+        return 1;
+    }
+
+    /// <summary>
+    /// A different boot resumes. The same boot and phase opens the desktop after
+    /// <see cref="MaxSameBootResumes"/> starts. Wall-clock subtraction is not used.
+    /// A missing boot id, phase, or count is stale.
+    /// </summary>
+    private static bool IsStaleHeartbeat(ShellEnvironment env, TenureState tenure, string? checkpointPhase)
+    {
+        if (tenure.BootId is null || tenure.Phase is null || tenure.ResumeCount is null)
         {
             return true;
         }
 
-        return env.Time.GetUtcNow() - tenure.HeartbeatUtc.Value > bundle.Policy.StaleTenureThreshold;
+        BootTick? current = env.Guest.ReadBootTick();
+        if (current is null)
+        {
+            return true;
+        }
+
+        if (current.Value.BootId != tenure.BootId.Value
+            || !string.Equals(tenure.Phase, checkpointPhase, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return tenure.ResumeCount.Value >= MaxSameBootResumes;
     }
 
     private static bool IsTimedOut(ShellEnvironment env, long startTimestamp, TimeSpan timeout) =>

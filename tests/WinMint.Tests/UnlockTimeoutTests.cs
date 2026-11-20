@@ -79,24 +79,33 @@ public class UnlockTimeoutTests
     public async Task Shell_stale_tenure_fails_open_and_unlocks()
     {
         ManualTimeProvider time = new();
-        time.Advance(TimeSpan.FromMinutes(20));
         RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
         StaleCheckpoints checkpoints = new(
             new TenureState(
                 CheckpointInProgress: true,
-                HeartbeatUtc: DateTimeOffset.UnixEpoch));
+                HeartbeatUtc: time.GetUtcNow(),
+                BootId: 1,
+                Phase: "jobs:1",
+                ResumeCount: ProvisioningSession.MaxSameBootResumes),
+            checkpointPhase: "jobs:1");
         RecordingSplashPresenter splash = new();
         RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Winlogon = winlogon,
+            Region = new MatchingRegion(),
+            Checkpoints = checkpoints,
+            BootId = 1,
+        };
 
         SessionResult result = await ProvisioningSession.RunShellAsync(
             Bundle(
                 dma: new DmaSettleTarget("en-GB", 242, "GMT Standard Time", true),
                 policy: SessionPolicy.SmokeDefaults with
                 {
-                    StaleTenureThreshold = TimeSpan.FromMinutes(15),
                     FailedDwell = TimeSpan.Zero,
                 }),
-            Env(time, winlogon, new MatchingRegion(), splash, evidence, checkpoints),
+            ProvisioningSessionTestFakes.Env(guest, evidence, time, splash),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
@@ -127,6 +136,77 @@ public class UnlockTimeoutTests
         Assert.Equal(SessionOutcome.Failed, result.Outcome);
         Assert.Equal("shell.stale", result.FinalStatus.Code);
         Assert.Equal(ExplorerShell, winlogon.Shell);
+    }
+
+    [Fact]
+    public async Task Shell_same_boot_under_resume_cap_survives_a_backward_utc_jump()
+    {
+        ManualTimeProvider time = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        RecordingCheckpoints checkpoints = new();
+        checkpoints.WriteCheckpoint(new CheckpointState("jobs:1"));
+        checkpoints.WriteHeartbeat(time.GetUtcNow(), 1, "jobs:1", 1);
+        time.JumpWallClock(TimeSpan.FromHours(-1));
+        RecordingEvidenceSink evidence = new();
+        FakeGuestMachine guest = new()
+        {
+            Winlogon = winlogon,
+            Region = new MatchingRegion(),
+            Checkpoints = checkpoints,
+            BootId = 1,
+        };
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                dma: new DmaSettleTarget(null, null, null, null),
+                policy: SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero },
+                dmaEnabled: false),
+            ProvisioningSessionTestFakes.Env(guest, evidence, time, new RecordingSplashPresenter()),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotEqual("shell.stale", result.FinalStatus.Code);
+        Assert.Contains("checkpoint.resume", evidence.Documents[^1].Phases);
+        Assert.Equal(ExplorerShell, winlogon.Shell);
+    }
+
+    [Fact]
+    public async Task Shell_empty_checkpoint_with_fresh_heartbeat_opens_desktop()
+    {
+        ManualTimeProvider time = new();
+        RecordingWinlogon winlogon = new() { Shell = SupervisorPath };
+        RecordingEvidenceSink evidence = new();
+        StaleCheckpoints checkpoints = new(
+            new TenureState(
+                CheckpointInProgress: true,
+                HeartbeatUtc: time.GetUtcNow(),
+                BootId: 1,
+                Phase: "jobs:1",
+                ResumeCount: 1));
+
+        SessionResult result = await ProvisioningSession.RunShellAsync(
+            Bundle(
+                dma: new DmaSettleTarget(null, null, null, null),
+                policy: SessionPolicy.SmokeDefaults with { FailedDwell = TimeSpan.Zero },
+                dmaEnabled: false),
+            ProvisioningSessionTestFakes.Env(
+                new FakeGuestMachine
+                {
+                    Winlogon = winlogon,
+                    Region = new MatchingRegion(),
+                    Checkpoints = checkpoints,
+                },
+                evidence,
+                time,
+                new RecordingSplashPresenter()),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(SessionOutcome.Failed, result.Outcome);
+        Assert.Equal("shell.checkpoint.invalid", result.FinalStatus.Code);
+        Assert.Equal("In-progress checkpoint empty; desktop opened.", result.FinalStatus.Message);
+        Assert.Equal(ExplorerShell, winlogon.Shell);
+        Assert.Equal("Failed", evidence.Documents[0].Outcome);
+        Assert.Equal("shell.checkpoint.invalid", evidence.Documents[0].StatusCode);
+        Assert.Equal("In-progress checkpoint empty; desktop opened.", evidence.Documents[0].StatusMessage);
     }
 
     [Fact]
@@ -215,19 +295,21 @@ public class UnlockTimeoutTests
         }
     }
 
-    private sealed class StaleCheckpoints(TenureState tenure) : ICheckpointStore
+    private sealed class StaleCheckpoints(TenureState tenure, string? checkpointPhase = null) : ICheckpointStore
     {
         public List<DateTimeOffset> HeartbeatsWritten { get; } = [];
 
         public TenureState ReadTenure() => tenure;
 
-        public void WriteHeartbeat(DateTimeOffset utcNow) => HeartbeatsWritten.Add(utcNow);
+        public void WriteHeartbeat(DateTimeOffset utcNow, long? bootId, string? phase, int? resumeCount) =>
+            HeartbeatsWritten.Add(utcNow);
 
         public void WriteTenurePhase(string code) { }
 
         public void WriteCheckpoint(CheckpointState state) { }
 
-        public CheckpointState? TryReadCheckpoint() => null;
+        public CheckpointState? TryReadCheckpoint() =>
+            checkpointPhase is null ? null : new CheckpointState(checkpointPhase);
 
         public void ClearCheckpoint() { }
     }

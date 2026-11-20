@@ -36,11 +36,12 @@ function Assert-Throws {
     param([scriptblock] $Action, [string] $Pattern)
     try {
         & $Action
-        throw "Expected failure matching '$Pattern'"
     }
     catch {
         if ($_.Exception.Message -notmatch $Pattern) { throw }
+        return
     }
+    throw "Expected failure matching '$Pattern'"
 }
 
 Assert-WinMintUsbDiskSafe -Identity (New-TestIdentity) -RequiredDiskBytes 8GB
@@ -53,6 +54,14 @@ Assert-Throws {
     Assert-WinMintUsbDiskSafe -Identity (New-TestIdentity -UniqueId '' -SerialNumber '') -RequiredDiskBytes 1
 } 'no stable'
 Assert-Throws { Assert-WinMintUsbDiskSafe -Identity (New-TestIdentity -Size 1GB) -RequiredDiskBytes 2GB } 'too small'
+
+Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -BusType File) -RequiredDiskBytes 8GB
+Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -BusType File -UniqueId '' -SerialNumber '') -RequiredDiskBytes 1GB
+Assert-Throws { Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -BusType File -IsBoot $true) -RequiredDiskBytes 1 } 'boot/system'
+Assert-Throws { Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -BusType File -IsSystem $true) -RequiredDiskBytes 1 } 'boot/system'
+Assert-Throws { Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -IsOffline $true) -RequiredDiskBytes 1 } 'offline'
+Assert-Throws { Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -IsReadOnly $true) -RequiredDiskBytes 1 } 'read-only'
+Assert-Throws { Assert-WinMintUsbLayoutDisk -Identity (New-TestIdentity -Size 1GB) -RequiredDiskBytes 2GB } 'too small'
 
 $identity = New-TestIdentity
 $changed = New-TestIdentity -SerialNumber 'other'
@@ -119,11 +128,31 @@ if ($writer -match 'evidence\.json|outputIso') {
     throw 'USB write must bind usb-media.json, not ImageEvidence or the Output ISO'
 }
 if ($writer -match 'PhysicalDrive|WriteAllBytes') { throw 'writer must not raw-write a physical drive' }
+if ($writer -notmatch 'UsbMediaLayout\.ps1') {
+    throw 'Write-UsbMedia must dot-source UsbMediaLayout.ps1'
+}
 $recheckAt = $writer.IndexOf('Assert-WinMintUsbIdentityUnchanged', [StringComparison]::Ordinal)
 $clearAt = $writer.LastIndexOf('Clear-Disk', [StringComparison]::Ordinal)
 if ($recheckAt -lt 0 -or $clearAt -lt 0 -or $recheckAt -ge $clearAt) {
     throw 'writer must recheck identity before Clear-Disk'
 }
+$layoutPath = Join-Path $repo 'servicing\UsbMediaLayout.ps1'
+$layout = Get-Content -LiteralPath $layoutPath -Raw -Encoding utf8
+if ($layout -match 'DestructiveToken|Clear-Disk') {
+    throw 'USB layout must not own the destructive token or Clear-Disk'
+}
+if ($layout -match 'BusType') {
+    throw 'USB layout must not require a USB bus'
+}
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($layoutPath, [ref] $tokens, [ref] $parseErrors)
+if ($parseErrors.Count -gt 0) { throw "USB layout parser errors: $($parseErrors -join '; ')" }
+if ($null -ne $ast.ParamBlock) { throw 'USB layout file must not have a param block' }
+$topLevel = @($ast.EndBlock.Statements | Where-Object {
+        $_ -isnot [System.Management.Automation.Language.FunctionDefinitionAst]
+    })
+if ($topLevel.Count -gt 0) { throw 'USB layout file must contain functions only' }
 
 Write-Output 'Test-WriteUsbMedia ok'
 exit 0

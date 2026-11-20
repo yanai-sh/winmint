@@ -77,7 +77,8 @@ just smoke-maintainer-monitor
 # Extra Watch attach: just watch-smoke .scratch/smoke
 ```
 
-USB acceptance remains maintainer-only. After a successful Apply work directory exists, validate its
+USB acceptance remains maintainer-only. The Apply that feeds these tools passes `--include-usb-media`
+(`WinMint.Cli build --include-usb-media`). After that work directory exists, validate its
 receipt-bound media, build one probe image, then exercise distinct firmware boundaries:
 
 ```powershell

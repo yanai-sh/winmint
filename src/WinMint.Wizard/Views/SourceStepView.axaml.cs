@@ -37,7 +37,7 @@ public partial class SourceStepView : UserControl
             ?.Select(static file => file.TryGetLocalPath())
             ?? [];
         string? iso = SourceStageViewModel.FirstExistingIsoPath(paths);
-        if (iso is not null && DataContext is ISourceStageViewModel vm)
+        if (iso is not null && DataContext is SourceStageViewModel vm)
         {
             vm.SourceIsoPath = iso;
         }

@@ -6,9 +6,9 @@ namespace WinMint.WinPeApply;
 /// Windows-subsystem WinPE host. winpeshl [LaunchApp] cannot pass arguments, so this exe
 /// CREATE_NO_WINDOW-launches LaunchApply.cmd beside it. Failures reopen a console with the log —
 /// disk-guard refusals must stay visible (#119).
-/// ponytail: Native AOT WinExe in WinPE. The boot surface is a fullscreen black GDI window;
-/// LaunchApply stays CreateProcess. If a Source ISO WinPE lacks an API the runtime needs,
-/// replace this host with a C Win32 stub; keep LaunchApply.cmd.
+/// ponytail: Native AOT WinExe in WinPE. The boot surface is a fullscreen black window that paints
+/// the embedded dark lockup; LaunchApply stays CreateProcess. If a Source ISO WinPE lacks an API
+/// the runtime needs, replace this host with a C Win32 stub; keep LaunchApply.cmd.
 /// </summary>
 internal static class WinPeApplyHost
 {
@@ -17,6 +17,7 @@ internal static class WinPeApplyHost
 
     private static int Main()
     {
+        ApplyBootSplash.EnablePerMonitorV2();
         return Run(AppContext.BaseDirectory, holdFailureConsole: true);
     }
 
@@ -42,8 +43,10 @@ internal static class WinPeApplyHost
             else
             {
                 started = true;
-                apply.WaitForExit();
-                code = apply.ExitCode;
+                if (WaitForApply(apply, out code))
+                {
+                    return 0;
+                }
             }
         }
 
@@ -55,6 +58,48 @@ internal static class WinPeApplyHost
         return code == 0
             ? 0
             : ShowFailure(system32, log, holdFailureConsole, code);
+    }
+
+    /// <summary>Returns true when ESC closed the splash and the launcher was stopped.</summary>
+    private static bool WaitForApply(Process apply, out int code)
+    {
+        bool escape = string.Equals(
+            Environment.GetEnvironmentVariable(ApplyBootSplash.EscapeVariable),
+            "1",
+            StringComparison.Ordinal);
+        if (!escape)
+        {
+            apply.WaitForExit();
+            code = apply.ExitCode;
+            return false;
+        }
+
+        while (!apply.HasExited)
+        {
+            if (ApplyBootSplash.EscapeRequested)
+            {
+                try
+                {
+                    apply.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                }
+
+                apply.WaitForExit();
+                code = 0;
+                return true;
+            }
+
+            if (apply.WaitForExit(50))
+            {
+                code = apply.ExitCode;
+                return false;
+            }
+        }
+
+        code = apply.ExitCode;
+        return false;
     }
 
     private static ProcessStartInfo HiddenLaunch(string system32, string logPath)

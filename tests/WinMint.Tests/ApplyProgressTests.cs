@@ -31,7 +31,7 @@ public class ApplyProgressTests
             File.WriteAllText(
                 workspace.ApplyStatus,
                 """
-                updated=2026-08-06T12:00:00.0000000Z
+                seq=1
                 stage=MountInstallWim
                 log=C:\ProgramData\WinMint\work\apply-events.jsonl
                 """);
@@ -58,10 +58,10 @@ public class ApplyProgressTests
         try
         {
             ServicingWorkspace workspace = new(root);
-            File.WriteAllText(workspace.ApplyStatus, "updated=t1\nstage=idle\nlog=\n");
+            File.WriteAllText(workspace.ApplyStatus, "seq=1\nstage=idle\nlog=\n");
             Assert.Equal("idle", workspace.TryReadProgress(TestContext.Current.CancellationToken)!.Value.Stage);
 
-            File.WriteAllText(workspace.ApplyStatus, "updated=t2\nstage=ExportWim\nlog=D:\\work\\apply-events.jsonl\n");
+            File.WriteAllText(workspace.ApplyStatus, "seq=2\nstage=ExportWim\nlog=D:\\work\\apply-events.jsonl\n");
             ApplyProgress snap = workspace.TryReadProgress(TestContext.Current.CancellationToken)!.Value;
             Assert.Equal("ExportWim", snap.Stage);
             Assert.Equal(@"D:\work\apply-events.jsonl", snap.LogPath);

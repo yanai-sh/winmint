@@ -73,6 +73,7 @@ function Write-WinMintHostHeartbeat {
     if ($null -ne $LogWriter) {
         $LogWriter.WriteLine($text)
     }
+    Write-Host $text
     Write-WinMintHostProgress -Activity $Activity -Status $text
 }
 

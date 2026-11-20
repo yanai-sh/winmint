@@ -197,9 +197,9 @@ public class BuildPlanPlanTests
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
+                ServicingOpcode.AddQualityUpdates,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
-                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             artifacts.Stages);

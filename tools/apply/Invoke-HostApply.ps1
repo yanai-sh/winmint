@@ -70,6 +70,8 @@ Set-Location $repoRoot
 . (Join-Path $repoRoot 'tools\AcceptanceManifest.ps1')
 . (Join-Path $repoRoot 'tools\host\Assert-ImageEvidenceCore.ps1')
 . (Join-Path $repoRoot 'tools\host\Invoke-ArtifactHygiene.ps1') -NoRun
+. (Join-Path $repoRoot 'servicing\Enable-WinMintStayAwake.ps1')
+. (Join-Path $repoRoot 'tools\host\Write-WinMintSourceStamp.ps1')
 
 $assertScript = Join-Path $PSScriptRoot 'Assert-ApplyEvidence.ps1'
 $runScratchHygiene = $false
@@ -174,9 +176,17 @@ function Resolve-WinMintCliExe {
     return $null
 }
 
+try {
 if (-not $SkipApply) {
+    Enable-WinMintStayAwake
     $supervisor = Join-Path $repoRoot 'artifacts\provisioning\WinMint.Provisioning.exe'
-    if (-not (Test-Path -LiteralPath $supervisor -PathType Leaf)) {
+    $winPeApply = Join-Path $repoRoot 'artifacts\winpe-apply\WinMintApply.exe'
+    $supervisorCurrent = Test-WinMintPublishedStampCurrent -Exe $supervisor -SourceRoots @(
+        (Join-Path $repoRoot 'src\WinMint.Provisioning'),
+        (Join-Path $repoRoot 'src\WinMint.Contracts'))
+    $winPeCurrent = Test-WinMintPublishedStampCurrent -Exe $winPeApply -SourceRoots @(
+        (Join-Path $repoRoot 'src\WinMint.WinPeApply'))
+    if (-not $supervisorCurrent -or -not $winPeCurrent) {
         Write-WinMintHostPhase -Lane Apply -Name 'Publishing Supervisor (Release AOT)…'
         & just publish-provisioning
         if ($LASTEXITCODE -ne 0) { throw "just publish-provisioning failed: $LASTEXITCODE" }
@@ -196,7 +206,8 @@ if (-not $SkipApply) {
     }
     $runScratchHygiene = $true
     $cliExe = Resolve-WinMintCliExe
-    $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict') + $strictArgs
+    # CLI defaults USB publish off. This maintainer Apply is the receipt the USB ladder reads.
+    $buildArgs = @('build', $Profile, '--iso', $Iso, '--work', $Work, '--image-quality', $ImageQuality, '--package-audit-strict', '--include-usb-media') + $strictArgs
     if ($WimIndex -gt 0) {
         $buildArgs += @('--wim-index', "$WimIndex")
         Write-WinMintHostPhase -Lane Apply -Name "WimIndex=$WimIndex"
@@ -259,3 +270,7 @@ Write-Host 'The Output ISO is unstable. Do not write it to USB. Do not boot it. 
 Write-Host 'Live posture on an already-installed PC: post-install/Apply-LivePosture.ps1'
 if ($runScratchHygiene) { Invoke-WinMintScratchHygiene -RepoRoot $repoRoot }
 exit 0
+}
+finally {
+    Disable-WinMintStayAwake
+}

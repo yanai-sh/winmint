@@ -4,7 +4,7 @@ namespace WinMint.Orchestrator;
 
 /// <summary>
 /// UAC parent progress: stage changes + sparse still (log length growth) + one quiet warn.
-/// Does not use apply-status <c>updated=</c> wall-clock age.
+/// Stage changes and log growth. Does not age apply-status.
 /// </summary>
 public sealed class ApplyOperatorProgressTracker(
     TimeSpan? stillInterval = null,

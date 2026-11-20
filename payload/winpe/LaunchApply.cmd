@@ -11,23 +11,30 @@ if not defined WINMINT_QE (
 echo WinMint: initializing Windows PE...
 call wpeinit
 set "PATH=%SystemRoot%\System32;%PATH%"
+rem Microsoft: wpeutil UpdateBootInfo records the volume WinPE booted from.
+rem PEBootRamdiskSourceDrive is that letter. detail volume turns it into a disk
+rem number. That number is the stick, including when diskpart's Type line is
+rem SCSI, SATA, NVMe, or RAID. A Type USB line is only an extra skip for a
+rem second stick that diskpart does label USB.
+wpeutil UpdateBootInfo
 set INSTALL=
-for /L %%i in (1,1,10) do (
-  if not defined INSTALL (
-    for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
-      if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set INSTALL=%%d
-    )
-    if not defined INSTALL (
-      mountvol /e >nul 2>&1
-      timeout /t 1 /nobreak >nul 2>&1
-    )
-  )
-)
+set BOOTDISK=
+set PAYLOADDISK=
+set WINMINT_BOOT_TAG=
+for /L %%i in (1,1,10) do if not defined INSTALL call :winmint_find_install
 if not defined INSTALL (
-  echo WinMint: install.wim not found on any drive
+  if defined WINMINT_BOOT_TAG (
+    echo WinMint: install.wim not found on any drive
+  ) else (
+    echo WinMint: install.wim not found on the boot disk
+  )
   exit /b 1
 )
-echo WinMint: found install.wim on drive %INSTALL%:
+if defined BOOTDISK (
+  echo WinMint: boot disk %BOOTDISK%, install.wim on %INSTALL%:
+) else (
+  echo WinMint: boot letter was not recorded. Payload disk %PAYLOADDISK% on %INSTALL%: is excluded.
+)
 rem Test-only media asks WinPE to prove that firmware booted the removable path and
 rem that its NTFS payload was visible. This exits before enumerating target disks.
 if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
@@ -68,7 +75,7 @@ if not defined TARGET (
 )
 :winmint_wait_done
 if not defined TARGET (
-  echo WinMint: no fixed disk to erase - every disk reports USB, or none matched the override.
+  echo WinMint: no fixed disk to erase. The boot disk is excluded. Every other disk reports USB, or none matched the override.
   type "%LIST%"
   exit /b 1
 )
@@ -219,8 +226,9 @@ if exist B:\Windows\WinMint.applied set HANDED=1
 diskpart /s "%WORK%\rm%N%.txt" >nul
 goto :eof
 
-rem Keeps a fixed disk as a candidate. USB is excluded categorically, so the installer can never
-rem erase the media it booted from, and disk numbers stay discovered rather than configured.
+rem Keeps a fixed disk as a candidate. BOOTDISK is the disk WinPE booted from.
+rem PAYLOADDISK is the disk that holds install.wim. A Type USB line is an extra
+rem skip for a second stick diskpart labels USB. Disk numbers stay discovered.
 rem ponytail: parses English diskpart output - a localised WinPE finds no candidates and refuses,
 rem which is the safe direction. Match on localised headings if that ever needs to work.
 :winmint_pick
@@ -234,9 +242,77 @@ diskpart /s "%WORK%\d%N%in.txt" > "%WORK%\d%N%.txt"
 set ISUSB=
 for /f "usebackq tokens=1,2,3" %%a in ("%WORK%\d%N%.txt") do if /i "%%a"=="Type" if /i "%%c"=="USB" set ISUSB=1
 if defined ISUSB goto :eof
+if defined BOOTDISK if "%N%"=="%BOOTDISK%" goto :eof
+if defined PAYLOADDISK if "%N%"=="%PAYLOADDISK%" goto :eof
 if defined OVERRIDE (
   %SystemRoot%\System32\findstr.exe /i /c:"%OVERRIDE%" "%WORK%\d%N%.txt" >nul
   if errorlevel 1 goto :eof
 )
 if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
+goto :eof
+
+rem Called from the install retry. Each call is parsed afresh, so BOOTDISK and
+rem WINMINT_BOOT_TAG set on an earlier try are visible here.
+:winmint_find_install
+if not defined BOOTDISK if not defined WINMINT_BOOT_TAG call :winmint_boot_disk
+if not defined BOOTDISK if not defined WINMINT_BOOT_TAG (
+  mountvol /e >nul 2>&1
+  timeout /t 1 /nobreak >nul 2>&1
+  goto :eof
+)
+for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
+  if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim call :winmint_accept_install %%d
+)
+if not defined INSTALL (
+  mountvol /e >nul 2>&1
+  timeout /t 1 /nobreak >nul 2>&1
+)
+goto :eof
+
+:winmint_boot_disk
+if defined BOOTDISK goto :eof
+if defined WINMINT_BOOT_TAG goto :eof
+set BOOTLETTER=
+for /f "tokens=1,2*" %%a in ('reg query HKLM\System\CurrentControlSet\Control /v PEBootRamdiskSourceDrive 2^>nul') do if /i "%%a"=="PEBootRamdiskSourceDrive" set "BOOTLETTER=%%c"
+if not defined BOOTLETTER (
+  set WINMINT_BOOT_TAG=1
+  goto :eof
+)
+set "BOOTLETTER=%BOOTLETTER:~0,1%"
+call :winmint_volume_disk %BOOTLETTER%
+if defined VOLDISK set "BOOTDISK=%VOLDISK%"
+goto :eof
+
+rem Tag mode accepts the first volume whose disk number can be read. When the
+rem boot disk is known, a volume on any other disk is left alone.
+:winmint_accept_install
+set "CANDIDATE=%~1"
+call :winmint_volume_disk %CANDIDATE%
+if not defined VOLDISK goto :eof
+if defined BOOTDISK if /i not "%VOLDISK%"=="%BOOTDISK%" goto :eof
+set "INSTALL=%CANDIDATE%"
+set "PAYLOADDISK=%VOLDISK%"
+goto :eof
+
+:winmint_volume_disk
+set VOLDISK=
+set "VLETTER=%~1"
+if not defined VLETTER goto :eof
+if not exist "%TEMP%\winmint" mkdir "%TEMP%\winmint"
+> "%TEMP%\winmint\vol%VLETTER%.txt" (
+  echo select volume %VLETTER%
+  echo detail volume
+  echo exit
+)
+diskpart /s "%TEMP%\winmint\vol%VLETTER%.txt" > "%TEMP%\winmint\vol%VLETTER%out.txt"
+call :winmint_parse_volume_disk "%TEMP%\winmint\vol%VLETTER%out.txt"
+goto :eof
+
+:winmint_parse_volume_disk
+if not exist "%~1" goto :eof
+set VOLDISK=
+for /f "usebackq tokens=1,2,3" %%a in ("%~1") do (
+  if /i "%%a"=="Disk" if not "%%b"=="###" if not defined VOLDISK set "VOLDISK=%%b"
+  if "%%a"=="*" if /i "%%b"=="Disk" if not "%%c"=="###" set "VOLDISK=%%c"
+)
 goto :eof

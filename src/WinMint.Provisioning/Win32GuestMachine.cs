@@ -99,6 +99,8 @@ public sealed class Win32GuestMachine : IGuestMachine
         }
     }
 
+    public BootTick? ReadBootTick() => Win32BootTick.Read();
+
     private static string? TryResolveScoopShim()
     {
         string candidate = Path.Combine(

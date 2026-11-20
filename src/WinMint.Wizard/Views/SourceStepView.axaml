@@ -3,7 +3,7 @@
              xmlns:vm="using:WinMint.Wizard.ViewModels"
              xmlns:orchestrator="using:WinMint.Orchestrator"
              x:Class="WinMint.Wizard.Views.SourceStepView"
-             x:DataType="vm:ISourceStageViewModel"
+             x:DataType="vm:SourceStageViewModel"
              DragDrop.AllowDrop="True">
   <StackPanel Spacing="18" MaxWidth="640">
     <TextBlock Classes="hero-title" Text="Source" />
