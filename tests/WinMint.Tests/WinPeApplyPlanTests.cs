@@ -134,6 +134,19 @@ public class WinPeApplyPlanTests
             "The WinPE boot disk must be resolved before diskpart clean.");
         Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);
+        Assert.Contains("de94bba4-06d1-4d40-a16a-bfd50179d6ac", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("gpt attributes=0x8000000000000001", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/setreimage /path R:\\Recovery\\WindowsRE /target W:\\Windows", payload, StringComparison.Ordinal);
+        int bootexAt = payload.IndexOf("/offline /bootex", StringComparison.Ordinal);
+        int payloadMarkerAt = payload.IndexOf(
+            "echo WinMint apply complete> \"%INSTALL%:\\winmint-applied.txt\"",
+            StringComparison.Ordinal);
+        int windowsMarkerAt = payload.IndexOf(
+            "echo WinMint apply complete> \"W:\\Windows\\WinMint.applied\"",
+            StringComparison.Ordinal);
+        int reagentcAt = payload.IndexOf("/setreimage /path R:\\Recovery\\WindowsRE", StringComparison.Ordinal);
+        Assert.True(bootexAt >= 0 && payloadMarkerAt > bootexAt && windowsMarkerAt > bootexAt && reagentcAt > windowsMarkerAt,
+            "Both apply markers must be written after bcdboot and before reagentc.");
 
         foreach (string reader in new[] { patcher, gate })
         {

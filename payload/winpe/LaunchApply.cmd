@@ -147,6 +147,89 @@ reg add HKLM\WinMintApply\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f
 reg unload HKLM\WinMintApply
 echo WinMint apply complete> "%INSTALL%:\winmint-applied.txt"
 echo WinMint apply complete> "W:\Windows\WinMint.applied"
+rem The markers are already written. A missing wim, a failed shrink, or a failed
+rem reagentc reboots. The next boot sees winmint-applied.txt and shuts down.
+echo WinMint: registering Windows RE...
+if not exist W:\Windows\System32\Recovery\Winre.wim (
+  echo WinMint: Winre.wim missing from the applied image
+  wpeutil reboot
+  exit /b 1
+)
+set WINRE_BYTES=
+for %%f in ("W:\Windows\System32\Recovery\Winre.wim") do set WINRE_BYTES=%%~zf
+set WINRE_MB=
+set SHRINK_MB=
+set /a WINRE_MB=(WINRE_BYTES+1048575)/1048576
+set /a SHRINK_MB=WINRE_MB+250
+if not defined SHRINK_MB (
+  echo WinMint: Winre.wim size could not be read
+  wpeutil reboot
+  exit /b 1
+)
+rem Shrink Windows by the wim size plus 250 MB, then create the recovery partition
+rem in that free space. The inbox Winre.wim stays where the image put it.
+> "%WORK%\winre.txt" (
+  echo select disk %TARGET%
+  echo select volume W
+  echo shrink desired=%SHRINK_MB%
+  echo create partition primary
+  echo format quick fs=ntfs label=Recovery
+  echo assign letter=R
+  echo set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac
+  echo gpt attributes=0x8000000000000001
+  echo exit
+)
+diskpart /s "%WORK%\winre.txt"
+if errorlevel 1 (
+  echo WinMint: recovery partition failed
+  wpeutil reboot
+  exit /b 1
+)
+if not exist R:\ (
+  echo WinMint: recovery partition failed
+  wpeutil reboot
+  exit /b 1
+)
+if not exist R:\Recovery\WindowsRE mkdir R:\Recovery\WindowsRE
+xcopy /h /y "W:\Windows\System32\Recovery\Winre.wim" "R:\Recovery\WindowsRE\"
+if errorlevel 1 (
+  echo WinMint: could not copy Winre.wim to the recovery partition
+  wpeutil reboot
+  exit /b 1
+)
+set REAGENTC=W:\Windows\System32\reagentc.exe
+set BCDEDIT=W:\Windows\System32\bcdedit.exe
+if not exist "%REAGENTC%" (
+  echo WinMint: reagentc.exe missing from the applied image
+  wpeutil reboot
+  exit /b 1
+)
+if not exist "%BCDEDIT%" (
+  echo WinMint: bcdedit.exe missing from the applied image
+  wpeutil reboot
+  exit /b 1
+)
+set OSGUID=
+for /f "tokens=1,2" %%a in ('"%BCDEDIT%" /store S:\EFI\Microsoft\Boot\BCD /enum {default} /v') do if /i "%%a"=="identifier" if not defined OSGUID set OSGUID=%%b
+set WINRE_GUID_OK=
+if defined OSGUID if "%OSGUID:~0,1%"=="{" if "%OSGUID:~9,1%"=="-" set WINRE_GUID_OK=1
+if not defined WINRE_GUID_OK (
+  echo WinMint: bcdedit did not return the Windows boot identifier
+  wpeutil reboot
+  exit /b 1
+)
+"%REAGENTC%" /setreimage /path R:\Recovery\WindowsRE /target W:\Windows
+if errorlevel 1 (
+  echo WinMint: reagentc /setreimage failed
+  wpeutil reboot
+  exit /b 1
+)
+"%REAGENTC%" /enable /osguid %OSGUID%
+if errorlevel 1 (
+  echo WinMint: reagentc /enable failed
+  wpeutil reboot
+  exit /b 1
+)
 echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
 exit /b 0
