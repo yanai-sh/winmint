@@ -104,6 +104,10 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch '/offline /bootex') {
             $defects += 'LaunchApply.cmd must bcdboot /offline /bootex (2023 UEFI CA boot manager)'
         }
+        # WinRE is registered from the recovery partition created after apply, not from System32\Recovery.
+        if ($body -notmatch '/setreimage /path R:\\Recovery\\WindowsRE /target W:\\Windows') {
+            $defects += 'LaunchApply.cmd must register WinRE from R:\Recovery\WindowsRE'
+        }
     }
 
     if (-not (Test-Path -LiteralPath $winpeshl)) {
