@@ -126,6 +126,12 @@ function Get-WinMintBootSetupCriticalClass {
     @('hdc', 'scsiadapter', 'usb', 'usbdevice', 'hidclass', 'keyboard', 'mouse', 'net')
 }
 
+function Get-WinMintClassifiedOfflineClass {
+    @('system', 'system ; system service', 'extension', 'net', 'hidclass',
+        'keyboard', 'mouse', 'usb', 'usbdevice', 'ucm', 'battery', 'mtd',
+        'monitor', 'surfacesystemmanagement')
+}
+
 function Read-InfMeta {
     param([string] $InfPath)
     $fields = @{ Class = ''; Provider = ''; DriverVer = '' }
@@ -139,6 +145,28 @@ function Read-InfMeta {
         Class = ([string]$fields.Class).ToLowerInvariant()
         Provider = [string]$fields.Provider
         DriverVer = [string]$fields.DriverVer
+    }
+}
+
+function Get-WinMintDriverInfToAdd {
+    param(
+        [string] $DriverSource,
+        [string[]] $IncludeClass
+    )
+    $wanted = @($IncludeClass | ForEach-Object { $_.ToLowerInvariant() })
+    foreach ($inf in Get-ChildItem -LiteralPath $DriverSource -Recurse -Filter '*.inf' -File -ErrorAction SilentlyContinue) {
+        $class = (Read-InfMeta -InfPath $inf.FullName).Class
+        if ($wanted -contains $class) { $inf.FullName }
+    }
+}
+
+function Get-WinMintAddDriverArgumentList {
+    param(
+        [string] $ImageMount,
+        [string[]] $InfPath
+    )
+    foreach ($inf in $InfPath) {
+        , @('/English', "/Image:$ImageMount", '/Add-Driver', "/Driver:$inf")
     }
 }
 
@@ -221,11 +249,7 @@ function Invoke-MsiAdministrativeExtract {
 
 function Test-SurfaceOfflineDriverClass {
     param([string] $Class)
-    $Class -in @(
-        'system', 'system ; system service', 'extension', 'net', 'hidclass',
-        'keyboard', 'mouse', 'usb', 'usbdevice', 'ucm', 'battery', 'mtd',
-        'monitor', 'surfacesystemmanagement'
-    )
+    $Class -in @(Get-WinMintClassifiedOfflineClass)
 }
 
 function Copy-ClassifiedDriverPayload {
@@ -284,8 +308,17 @@ function Copy-ClassifiedDriverPayload {
 }
 
 function Invoke-DismAddDriver {
-    param([string] $ImageMount, [string] $DriverSource)
-    Invoke-WinMintDism -ArgumentList @('/English', "/Image:$ImageMount", '/Add-Driver', "/Driver:$DriverSource", '/Recurse') -Stage 'Add-Driver'
+    param(
+        [string] $ImageMount,
+        [string] $DriverSource,
+        [string[]] $IncludeClass
+    )
+    # One /Driver: per included INF. The rest of that directory stays so DISM can
+    # read the binaries the INF names. A neighbor INF is not an argument.
+    foreach ($inf in @(Get-WinMintDriverInfToAdd -DriverSource $DriverSource -IncludeClass $IncludeClass)) {
+        $add = @(Get-WinMintAddDriverArgumentList -ImageMount $ImageMount -InfPath $inf)
+        Invoke-WinMintDism -ArgumentList $add[0] -Stage 'Add-Driver'
+    }
 }
 
 # --- main ---
@@ -323,7 +356,8 @@ if ($Lane -eq 'Test') {
     $null = Copy-SetupCriticalDriverSubset -DriverSource $preparedDir -Destination $installSource
 }
 Write-Output "Injecting $($inventory.includedOfflineCount) offline-safe driver(s) into install.wim (lane=$Lane)…"
-Invoke-DismAddDriver -ImageMount $mountDir -DriverSource $installSource
+$installClasses = if ($Lane -eq 'Test') { Get-WinMintBootSetupCriticalClass } else { Get-WinMintClassifiedOfflineClass }
+Invoke-DismAddDriver -ImageMount $mountDir -DriverSource $installSource -IncludeClass $installClasses
 
 $bootWim = Join-Path $mediaDir 'sources\boot.wim'
 $bootInfCount = 0
@@ -350,7 +384,7 @@ if (Test-Path -LiteralPath $bootWim) {
                 Write-Output "Injecting setup-critical drivers into boot.wim index $index…"
                 Invoke-WinMintDism -ArgumentList @('/English', '/Mount-Image', "/ImageFile:$bootWim", "/Index:$index", "/MountDir:$bootMount") -Stage 'Mount-Image'
                 try {
-                    Invoke-DismAddDriver -ImageMount $bootMount -DriverSource $bootDriverSource
+                    Invoke-DismAddDriver -ImageMount $bootMount -DriverSource $bootDriverSource -IncludeClass (Get-WinMintBootSetupCriticalClass)
                 }
                 finally {
                     Invoke-WinMintDism -ArgumentList @('/English', '/Unmount-Image', "/MountDir:$bootMount", '/Commit') -Stage 'Unmount-Commit'
