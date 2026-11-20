@@ -31,6 +31,7 @@ public static partial class BuildPlan
                             [StageParams.DetailsUrl] = drivers.DetailsUrl,
                             [StageParams.ExpectedFileNameRegex] = drivers.ExpectedFileNameRegex,
                             [StageParams.Lane] = export.Name,
+                            [StageParams.InstallDriverSet] = drivers.InstallDriverSet,
                         },
                         ServicingOpcode.ExportWim => new Dictionary<string, string>(StringComparer.Ordinal)
                         {
