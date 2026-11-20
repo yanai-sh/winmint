@@ -66,7 +66,13 @@ finally {
 
 $kernel = Get-Content -LiteralPath (Join-Path $repo 'servicing\Inject-SurfaceDrivers.ps1') -Raw -Encoding utf8
 if ($kernel -notmatch '\$Lane -eq ''Test''' -or $kernel -notmatch 'surface_test_install_drivers') {
-    throw 'Test lane must inject the boot class subset into install.wim'
+    throw 'Test without the stick switch must inject the boot class subset into install.wim'
+}
+if ($kernel -notmatch '\$InstallDriverSet -ne ''Classified''' -or $kernel -notmatch 'Get-WinMintClassifiedOfflineClass') {
+    throw 'the stick install-driver switch must inject the classified offline set'
+}
+if ($kernel -notmatch 'Get-WinMintAddDriverArgumentList') {
+    throw 'the classified set must be added by the per-INF Add-Driver list'
 }
 if ($kernel -match "'/Recurse'") {
     throw 'Add-Driver must name each included INF and must not pass /Recurse'

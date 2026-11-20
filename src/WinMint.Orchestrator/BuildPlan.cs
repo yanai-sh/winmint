@@ -553,7 +553,18 @@ public static partial class BuildPlan
         {
             SurfaceDriverDevice device = SurfaceDriverCatalog.Devices[profile.Drivers!.DeviceId];
             stages.Add(ServicingOpcode.InjectDrivers);
-            drivers = new DriverInject(device.Id, device.DetailsUrl, device.ExpectedFileNameRegex);
+            // The USB image for this Surface gets the classified offline set. Smoke's Test
+            // apply does not publish USB media, so its install.wim stays on the boot subset.
+            // ImageQuality stays whatever the caller set; this does not select Release export.
+            string installDriverSet = options.IncludeUsbMedia
+                && string.Equals(device.Id, "surface-laptop-7", StringComparison.OrdinalIgnoreCase)
+                ? "Classified"
+                : "Boot";
+            drivers = new DriverInject(
+                device.Id,
+                device.DetailsUrl,
+                device.ExpectedFileNameRegex,
+                installDriverSet);
         }
 
         stages.Add(ServicingOpcode.StagePayload);
