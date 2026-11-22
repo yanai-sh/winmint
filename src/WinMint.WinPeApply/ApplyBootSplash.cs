@@ -45,6 +45,38 @@ internal static class ApplyBootSplash
         return surface;
     }
 
+    /// <summary>
+    /// Host preview of the apply splash, plus the disk list. Does not start LaunchApply.
+    /// Esc closes the window. Choosing a disk does not change it.
+    /// </summary>
+    internal static void HoldForPreview()
+    {
+        IReadOnlyList<SplashDisk> disks;
+        try
+        {
+            disks = SplashDiskList.Read(out _);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            disks = [];
+        }
+
+        BootSurface surface = new(escapeEnabled: true, disks);
+        try
+        {
+            if (!surface.Start())
+            {
+                return;
+            }
+
+            surface.JoinUi();
+        }
+        finally
+        {
+            surface.Dispose();
+        }
+    }
+
     private sealed class Nop : IDisposable
     {
         internal static readonly Nop Instance = new();
@@ -62,16 +94,42 @@ internal static class ApplyBootSplash
         private const uint WmTick = 0x0400;
 
         private const int VkEscape = 0x1B;
+        private const int VkReturn = 0x0D;
+        private const int VkUp = 0x26;
+        private const int VkDown = 0x28;
 
-        private readonly bool _escapeEnabled =
-            string.Equals(Environment.GetEnvironmentVariable(EscapeVariable), "1", StringComparison.Ordinal);
-
+        private readonly bool _escapeEnabled;
+        private readonly bool _picker;
+        private readonly IReadOnlyList<SplashDisk> _disks;
         private readonly ManualResetEventSlim _ready = new(false);
         private Thread? _uiThread;
         private SafeHwnd? _hwnd;
+        private SplashPromptPainter? _painter;
         private int _phase;
+        private int _focus = -1;
+        private int _marked = -1;
+        private int _upHeld;
+        private int _downHeld;
+        private int _enterHeld;
+        private bool _pressed;
+        private int _dpi = 96;
         private bool _shown;
         private bool _disposed;
+
+        internal BootSurface(bool? escapeEnabled = null)
+            : this(escapeEnabled, disks: null)
+        {
+        }
+
+        internal BootSurface(bool? escapeEnabled, IReadOnlyList<SplashDisk>? disks)
+        {
+            _escapeEnabled = escapeEnabled ?? string.Equals(
+                Environment.GetEnvironmentVariable(EscapeVariable),
+                "1",
+                StringComparison.Ordinal);
+            _picker = disks is not null;
+            _disks = disks ?? [];
+        }
 
         public bool Start()
         {
@@ -85,6 +143,8 @@ internal static class ApplyBootSplash
             _ = _ready.Wait(TimeSpan.FromSeconds(2));
             return _shown;
         }
+
+        internal void JoinUi() => _uiThread?.Join();
 
         public void Dispose()
         {
@@ -115,14 +175,30 @@ internal static class ApplyBootSplash
                 HWND hwnd = _hwnd!.Hwnd;
                 _ = PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOW);
                 _ = PInvoke.UpdateWindow(hwnd);
+                if (_picker)
+                {
+                    _ = PInvoke.SetForegroundWindow(hwnd);
+                    _ = PInvoke.SetWindowText(hwnd, SplashDiskPrompt.Heading);
+#pragma warning disable CA1416 // WinPE on a current Source ISO is Windows 10 or later.
+                    uint dpi = PInvoke.GetDpiForWindow(hwnd);
+#pragma warning restore CA1416
+                    if (dpi > 0)
+                    {
+                        _dpi = (int)dpi;
+                    }
+
+                    _painter = new SplashPromptPainter();
+                }
+
                 Paint(hwnd, beginPaint: false);
+                int tickMs = _picker ? 40 : 140;
                 using Timer tick = new(_ =>
                 {
                     if (_hwnd is { IsInvalid: false } open)
                     {
                         _ = PInvoke.PostMessage(open.Hwnd, WmTick, default, default);
                     }
-                }, null, 140, 140);
+                }, null, tickMs, tickMs);
                 _shown = true;
                 _ready.Set();
                 DismissIfEscape();
@@ -137,8 +213,19 @@ internal static class ApplyBootSplash
 
                     if (msg.message == WmTick)
                     {
-                        _phase++;
-                        Paint(hwnd, beginPaint: false);
+                        if (_picker)
+                        {
+                            if (PollKeys())
+                            {
+                                Paint(hwnd, beginPaint: false);
+                            }
+                        }
+                        else
+                        {
+                            _phase++;
+                            Paint(hwnd, beginPaint: false);
+                        }
+
                         DismissIfEscape();
                         continue;
                     }
@@ -161,8 +248,71 @@ internal static class ApplyBootSplash
             }
             finally
             {
+                _painter?.Dispose();
+                _painter = null;
                 _ready.Set();
             }
+        }
+
+        private bool PollKeys()
+        {
+            bool changed = false;
+            changed |= Edge(VkUp, ref _upHeld, allowRepeat: true, () => Move(-1));
+            changed |= Edge(VkDown, ref _downHeld, allowRepeat: true, () => Move(1));
+            changed |= Edge(VkReturn, ref _enterHeld, allowRepeat: false, Confirm);
+            bool pressed = _enterHeld > 0 && _focus >= 0;
+            if (pressed != _pressed)
+            {
+                _pressed = pressed;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool Edge(int vk, ref int held, bool allowRepeat, Func<bool> act)
+        {
+            bool down = (PInvoke.GetAsyncKeyState(vk) & 0x8000) != 0;
+            if (!down)
+            {
+                held = 0;
+                return false;
+            }
+
+            held++;
+            bool fire = held == 1 || (allowRepeat && held >= 8 && (held - 8) % 3 == 0);
+            return fire && act();
+        }
+
+        private bool Move(int direction)
+        {
+            if (_disks.Count == 0)
+            {
+                return false;
+            }
+
+            int next = _focus < 0
+                ? (direction > 0 ? 0 : _disks.Count - 1)
+                : Math.Clamp(_focus + direction, 0, _disks.Count - 1);
+            if (next == _focus)
+            {
+                return false;
+            }
+
+            _focus = next;
+            _marked = -1;
+            return true;
+        }
+
+        private bool Confirm()
+        {
+            if (_focus < 0 || _focus >= _disks.Count || _marked == _focus)
+            {
+                return false;
+            }
+
+            _marked = _focus;
+            return true;
         }
 
         private void DismissIfEscape()
@@ -270,6 +420,12 @@ internal static class ApplyBootSplash
                     ROP_CODE.PATCOPY);
                 _ = PInvoke.SelectObject(hdc, previous);
                 _ = PInvoke.DeleteObject(black);
+
+                if (_picker && _painter is not null)
+                {
+                    _painter.Paint(hdc, rect, _dpi, _disks, _focus, _marked, _pressed);
+                    return;
+                }
 
                 int cx = (rect.left + rect.right) / 2;
                 int cy = (rect.top + rect.bottom) / 2;

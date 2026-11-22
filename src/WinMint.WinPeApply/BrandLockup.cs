@@ -113,6 +113,18 @@ internal static class BrandLockup
         return true;
     }
 
+    internal static bool TryBlitAt(HDC hdc, int x, int y, int width, int height, out int bottom)
+    {
+        bottom = y;
+        if (width < 64 || height < 16 || !TryRasterize(width, height, out byte[] pixels) || !Blit(hdc, x, y, width, height, pixels))
+        {
+            return false;
+        }
+
+        bottom = y + height;
+        return true;
+    }
+
     private static bool TrySize(int clientW, int clientH, out int width, out int height)
     {
         width = 0;

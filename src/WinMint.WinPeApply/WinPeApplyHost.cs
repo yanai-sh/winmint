@@ -15,10 +15,27 @@ internal static class WinPeApplyHost
     internal const string LaunchName = "LaunchApply.cmd";
     private const string QuickEditSkip = "WINMINT_QE";
 
-    private static int Main()
+    private static int Main(string[] args)
     {
         ApplyBootSplash.EnablePerMonitorV2();
-        return Run(AppContext.BaseDirectory, holdFailureConsole: true);
+        return Dispatch(
+            args,
+            () => Run(AppContext.BaseDirectory, holdFailureConsole: true),
+            ApplyBootSplash.HoldForPreview);
+    }
+
+    /// <summary>
+    /// <c>--splash</c> is the host preview of the disk prompt. It does not start LaunchApply.
+    /// </summary>
+    internal static int Dispatch(string[] args, Func<int> runApply, Action showSplash)
+    {
+        if (args.Length == 1 && string.Equals(args[0], "--splash", StringComparison.Ordinal))
+        {
+            showSplash();
+            return 0;
+        }
+
+        return runApply();
     }
 
     internal static int Run(string system32, bool holdFailureConsole)
