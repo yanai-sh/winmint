@@ -45,3 +45,12 @@ CreateCompatibleDC
 CreateCompatibleBitmap
 DeleteDC
 GetPixel
+CreateFont
+DrawText
+SetBkMode
+SetTextColor
+CreatePen
+RoundRect
+GetDpiForWindow
+SetForegroundWindow
+SetWindowText
