@@ -104,7 +104,11 @@ public sealed record BuildArtifacts(
     IReadOnlyList<string> EffectiveWsl,
     bool PackageWireHonest);
 
-public sealed record DriverInject(string DeviceId, string DetailsUrl, string ExpectedFileNameRegex);
+public sealed record DriverInject(
+    string DeviceId,
+    string DetailsUrl,
+    string ExpectedFileNameRegex,
+    string InstallDriverSet = "Boot");
 
 public sealed record EffectivePackageFact(
     EffectivePackageSource Source,
@@ -162,6 +166,7 @@ public static class StageParams
     public const string DeviceId = "deviceId";
     public const string DetailsUrl = "detailsUrl";
     public const string ExpectedFileNameRegex = "expectedFileNameRegex";
+    public const string InstallDriverSet = "installDriverSet";
     public const string MinimumWindowsBuild = "minimumWindowsBuild";
     public const string Architecture = "architecture";
     public const string QualityPackageDir = "qualityPackageDir";

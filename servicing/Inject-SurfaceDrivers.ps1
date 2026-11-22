@@ -6,7 +6,8 @@ param(
     [Parameter(Mandatory)] [string] $DeviceId,
     [Parameter(Mandatory)] [string] $DetailsUrl,
     [Parameter(Mandatory)] [string] $ExpectedFileNameRegex,
-    [Parameter(Mandatory)] [ValidateSet('Test', 'Release')] [string] $Lane
+    [Parameter(Mandatory)] [ValidateSet('Test', 'Release')] [string] $Lane,
+    [ValidateSet('Boot', 'Classified')] [string] $InstallDriverSet = 'Boot'
 )
 # Surface Catalog offline driver injection — param-only (issue 63).
 # Download → MSI extract → SurfaceMsiSafe classify → DISM Add-Driver (install.wim + boot.wim subset).
@@ -351,12 +352,15 @@ if ([int]$inventory.includedOfflineCount -lt 1) {
 }
 
 $installSource = $preparedDir
-if ($Lane -eq 'Test') {
+# Test without the stick switch keeps the Hyper-V subset. Classified is the Surface
+# offline set and does not change export lane. Release already uses that set.
+$useBootInstall = $Lane -eq 'Test' -and $InstallDriverSet -ne 'Classified'
+if ($useBootInstall) {
     $installSource = Join-Path $workDirectory 'surface_test_install_drivers'
     $null = Copy-SetupCriticalDriverSubset -DriverSource $preparedDir -Destination $installSource
 }
-Write-Output "Injecting $($inventory.includedOfflineCount) offline-safe driver(s) into install.wim (lane=$Lane)…"
-$installClasses = if ($Lane -eq 'Test') { Get-WinMintBootSetupCriticalClass } else { Get-WinMintClassifiedOfflineClass }
+Write-Output "Injecting $($inventory.includedOfflineCount) offline-safe driver(s) into install.wim (lane=$Lane, installDriverSet=$InstallDriverSet)…"
+$installClasses = if ($useBootInstall) { Get-WinMintBootSetupCriticalClass } else { Get-WinMintClassifiedOfflineClass }
 Invoke-DismAddDriver -ImageMount $mountDir -DriverSource $installSource -IncludeClass $installClasses
 
 $bootWim = Join-Path $mediaDir 'sources\boot.wim'

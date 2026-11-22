@@ -160,7 +160,8 @@ public static partial class ImageServicing
                             plan.Drivers.DeviceId,
                             plan.Drivers.DetailsUrl,
                             plan.Drivers.ExpectedFileNameRegex,
-                            ExportLane.For(plan.Manifest.ImageQuality).Name),
+                            ExportLane.For(plan.Manifest.ImageQuality).Name,
+                            plan.Drivers.InstallDriverSet),
                         ServicingJsonContext.Default.InjectDriversParameters);
                     break;
                 case ServicingOpcode.ExportWim:

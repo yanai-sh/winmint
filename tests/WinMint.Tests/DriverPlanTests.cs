@@ -68,6 +68,8 @@ public class DriverPlanTests
             "https://www.microsoft.com/en-us/download/details.aspx?id=106120",
             inject.DetailsUrl);
         Assert.DoesNotContain(".ps1", inject.ExpectedFileNameRegex, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Boot", inject.InstallDriverSet);
+        Assert.Equal(ImageQualityLane.Test, result.Value.Manifest.ImageQuality);
 
         IReadOnlyList<ServicingOpcode> opcodes = result.Value.Stages;
         int mountAt = opcodes.ToList().IndexOf(ServicingOpcode.MountInstallWim);
@@ -75,6 +77,22 @@ public class DriverPlanTests
         int policiesAt = opcodes.ToList().IndexOf(ServicingOpcode.StampOfflinePolicies);
         int payloadAt = opcodes.ToList().IndexOf(ServicingOpcode.StagePayload);
         Assert.True(mountAt >= 0 && policiesAt > mountAt && policiesAt < injectAt && injectAt < payloadAt);
+    }
+
+    [Fact]
+    public void Plan_usb_surface_laptop_7_uses_classified_drivers_on_the_test_lane()
+    {
+        Profile profile = Parse(MinimalJson(deviceId: "surface-laptop-7"));
+
+        Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
+            profile,
+            new RunOptions { IncludeUsbMedia = true });
+
+        Assert.True(result.IsOk, result.IsOk ? null : $"{result.Error.Code}: {result.Error.Message}");
+        Assert.Equal(ImageQualityLane.Test, result.Value.Manifest.ImageQuality);
+        Assert.False(result.Value.PackageStrict);
+        Assert.Equal("Classified", result.Value.Drivers!.InstallDriverSet);
+        Assert.Contains(ServicingOpcode.PublishUsbMedia, result.Value.Stages);
     }
 
     [Fact]
