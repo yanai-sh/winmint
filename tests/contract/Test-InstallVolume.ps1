@@ -44,7 +44,7 @@ foreach ($relative in @('payload/winpe/LaunchApply.cmd')) {
     if ($sets.Count -ne 1) {
         throw "$relative must confirm the letter that held the install file"
     }
-    if (@($lines | Where-Object { $_.Trim() -eq 'for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install' }).Count -ne 1) {
+    if (@($lines | Where-Object { $_.Trim() -eq 'for /L %%i in (1,1,10) do if not defined PAYLOADDISK if not defined WINMINT_BOOT_TAG call :winmint_find_install' }).Count -ne 1) {
         throw "$relative must retry boot-disk confirmation ten times"
     }
     if ($text -match 'set INSTALL=%%d') {

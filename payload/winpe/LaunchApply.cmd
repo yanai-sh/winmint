@@ -54,32 +54,28 @@ set INSTALL=%SEEN%
 rem Markers stay on this letter. diskpart starts only after the install file is present.
 if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
 rem A second boot of this USB must not erase the disk. A finished install turns the PC off.
-if not exist "%INSTALL%:\winmint-reinstall.txt" if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
+rem The applied marker must not hide a request to put the previous EFI files back.
+if not exist "%INSTALL%:\winmint-reinstall.txt" if exist "%INSTALL%:\winmint-applied.txt" if not exist "%INSTALL%:\winmint-restore-esp.txt" goto :winmint_finished
 if not exist "%INSTALL%:\winmint-install.txt" (
   echo WinMint: install file is not present.
   echo WinMint: the internal disk was not changed.
   wpeutil shutdown
   exit /b 0
 )
-for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install
+for /L %%i in (1,1,10) do if not defined PAYLOADDISK if not defined WINMINT_BOOT_TAG call :winmint_find_install
+if defined WINMINT_BOOT_TAG (
+  echo WinMint: boot disk was not recorded. The internal disk was not changed.
+  exit /b 1
+)
 if not defined PAYLOADDISK (
-  if defined WINMINT_BOOT_TAG (
-    echo WinMint: install.wim not found on any drive
-  ) else (
-    echo WinMint: install.wim not found on the boot disk
-  )
+  echo WinMint: install.wim not found on the boot disk
   exit /b 1
 )
 if exist "%INSTALL%:\winmint-reinstall.txt" (
-  del /f /q "%INSTALL%:\winmint-reinstall.txt"
   set REINSTALL=1
-  echo WinMint: reinstall requested. The internal disk will be erased.
+  echo WinMint: reinstall requested. The Windows partition will be replaced.
 )
-if defined BOOTDISK (
-  echo WinMint: boot disk %BOOTDISK%, install.wim on %INSTALL%:
-) else (
-  echo WinMint: boot letter was not recorded. Payload disk %PAYLOADDISK% on %INSTALL%: is excluded.
-)
+echo WinMint: boot disk %BOOTDISK%, install.wim on %INSTALL%:
 set WORK=%TEMP%\winmint
 if not exist "%WORK%" mkdir "%WORK%"
 set LIST=%WORK%\disks.txt
@@ -107,6 +103,11 @@ echo WinMint: waiting for a fixed disk (try %TRY%)...
 diskpart /s "%WORK%\listdisk.txt" > "%LIST%"
 echo WinMint: diskpart list:
 type "%LIST%"
+call :winmint_audit_buses
+if defined WINMINT_BUS_FAIL (
+  echo WinMint: could not read disk bus types
+  exit /b 1
+)
 set EXTRA=
 for /f "usebackq tokens=1,2" %%a in ("%LIST%") do if /i "%%a"=="Disk" if not "%%b"=="###" call :winmint_pick %%b
 if not defined TARGET (
@@ -122,61 +123,128 @@ if not defined TARGET (
 if defined EXTRA (
   echo WinMint: more than one fixed disk - refusing to guess which one to erase.
   type "%LIST%"
-  echo Put a unique model substring in %INSTALL%:\winmint-target-disk.txt and reboot.
+  echo Put one whole model line in %INSTALL%:\winmint-target-disk.txt and reboot.
   exit /b 1
 )
-if not defined REINSTALL call :winmint_see_applied
+set RESUME=
+rem winmint-format-started without the applied marker resumes. A finished install plus reinstall replaces Windows again.
+if exist "%INSTALL%:\winmint-format-started.txt" if not exist "%INSTALL%:\winmint-applied.txt" set RESUME=1
+if not defined REINSTALL if not defined RESUME if not exist "%INSTALL%:\winmint-restore-esp.txt" call :winmint_see_applied
 if defined HANDED goto :winmint_finished
 if defined PROBEFAIL (
   echo WinMint: could not check the internal disk for an existing install. Refusing to erase.
   exit /b 1
 )
 echo WinMint: erasing disk %TARGET%
-set DP=%WORK%\diskpart.txt
-> "%DP%" (
-  echo select disk %TARGET%
-  echo online disk noerr
-  echo attributes disk clear readonly noerr
-  echo clean
-  echo convert gpt
-  echo create partition efi size=300
-  echo format quick fs=fat32 label=System
-  echo assign letter=S
-  echo create partition msr size=16
-  echo create partition primary
-  echo format quick fs=ntfs label=Windows
-  echo assign letter=W
-  echo exit
-)
-echo WinMint: partitioning disk %TARGET%...
-diskpart /s "%DP%"
-if errorlevel 1 (
-  echo WinMint: diskpart failed
+if not defined BOOTDISK (
+  echo WinMint: boot disk was not recorded. The internal disk was not changed.
   exit /b 1
 )
-echo WinMint: applying install.wim Index:1 to W:\...
-dism /English /Apply-Image /ImageFile:%INSTALL%:\sources\install.wim /Index:1 /ApplyDir:W:\
+call :winmint_map_parts
+if defined PART_FAIL (
+  echo WinMint: a partition type could not be read. The internal disk was not changed.
+  exit /b 1
+)
+if not defined EFI_PART (
+  echo WinMint: EFI partition was not found. The internal disk was not changed.
+  exit /b 1
+)
+if not "%WIN_COUNT%"=="1" if defined RESUME if "%WIN_COUNT%"=="0" if "%BASIC_COUNT%"=="1" (
+  set WIN_PART=%BASIC_PART%
+  set WIN_COUNT=1
+)
+if not "%WIN_COUNT%"=="1" (
+  echo WinMint: the Windows partition was not identified. The internal disk was not changed.
+  exit /b 1
+)
+set EFILETTER=
+set WINLETTER=
+set RECLETTER=
+call :winmint_take_letter EFILETTER
+call :winmint_take_letter WINLETTER
+call :winmint_take_letter RECLETTER
+if defined PART_FAIL (
+  echo WinMint: no free drive letter. The internal disk was not changed.
+  exit /b 1
+)
+call :winmint_assign %EFI_PART% %EFILETTER%
+if errorlevel 1 exit /b 1
+call :winmint_require_target %EFILETTER%
+if errorlevel 1 exit /b 1
+if exist "%INSTALL%:\winmint-restore-esp.txt" (
+  call :winmint_restore_esp
+  if errorlevel 1 exit /b 1
+  del /f /q "%INSTALL%:\winmint-restore-esp.txt"
+  echo WinMint: previous EFI files were restored.
+  goto :winmint_unplug
+)
+call :winmint_assign %WIN_PART% %WINLETTER%
+if errorlevel 1 exit /b 1
+call :winmint_require_target %WINLETTER%
+if errorlevel 1 exit /b 1
+"%~dp0WinMintApply.exe" --image-fits "%INSTALL%:\sources\install.wim" %WINLETTER%
+set FIT=%ERRORLEVEL%
+if "%FIT%"=="2" (
+  echo WinMint: the Windows partition is too small. The internal disk was not changed.
+  exit /b 1
+)
+if not "%FIT%"=="0" (
+  echo WinMint: could not compare the image to the Windows partition. The internal disk was not changed.
+  exit /b 1
+)
+rem EFI files are copied to winmint-esp-backup before the Windows partition is formatted.
+call :winmint_backup_esp
+if errorlevel 1 (
+  echo WinMint: EFI backup failed. The internal disk was not changed.
+  exit /b 1
+)
+if defined RESUME goto :winmint_resume
+> "%TEMP%\winmint-status.txt" echo Formatting the Windows partition.
+> "%TEMP%\winmint-format-started.txt" echo formatted
+> "%INSTALL%:\winmint-format-started.txt" echo formatted
+call :winmint_format_windows
+if errorlevel 1 exit /b 1
+goto :winmint_apply
+
+:winmint_resume
+if exist "%WINLETTER%:\Windows\System32\config\SYSTEM" (
+  if exist "%INSTALL%:\winmint-boot-files.txt" goto :winmint_lab
+  goto :winmint_bcd
+)
+
+:winmint_apply
+> "%TEMP%\winmint-status.txt" echo Applying Windows.
+echo WinMint: applying install.wim Index:1 to %WINLETTER%:\...
+dism /English /Apply-Image /ImageFile:%INSTALL%:\sources\install.wim /Index:1 /ApplyDir:%WINLETTER%:\
 if errorlevel 1 (
   echo WinMint: dism Apply-Image failed
+  call :winmint_restore_esp
   exit /b 1
 )
-echo WinMint: writing UEFI boot files to S:\...
+
+:winmint_bcd
+> "%TEMP%\winmint-status.txt" echo Writing boot files.
 rem The applied image's bcdboot knows /offline /bootex. WinPE's copy may not.
 rem /s still targets the internal EFI partition. /offline /bootex selects the
 rem Windows UEFI CA 2023 boot manager. Surface rejects the 2011 manager.
-set BCDBOOT=W:\Windows\System32\bcdboot.exe
+set BCDBOOT=%WINLETTER%:\Windows\System32\bcdboot.exe
 if not exist "%BCDBOOT%" set BCDBOOT=bcdboot
-"%BCDBOOT%" W:\Windows /s S: /f UEFI /offline /bootex
+"%BCDBOOT%" %WINLETTER%:\Windows /s %EFILETTER%: /f UEFI /offline /bootex
 if errorlevel 1 (
   echo WinMint: bcdboot /offline /bootex failed. The 2011 UEFI CA boot manager is not a fallback.
+  call :winmint_restore_esp
   exit /b 1
 )
+echo WinMint boot files> "%INSTALL%:\winmint-boot-files.txt"
+del /f /q "%INSTALL%:\winmint-reinstall.txt"
+
+:winmint_lab
 if exist "%INSTALL%:\OobeUnattend.xml" (
-  if not exist W:\Windows\Panther mkdir W:\Windows\Panther
-  copy /Y "%INSTALL%:\OobeUnattend.xml" W:\Windows\Panther\unattend.xml
+  if not exist %WINLETTER%:\Windows\Panther mkdir %WINLETTER%:\Windows\Panther
+  copy /Y "%INSTALL%:\OobeUnattend.xml" %WINLETTER%:\Windows\Panther\unattend.xml
 )
 echo WinMint: configuring LabConfig bypasses in offline SYSTEM hive...
-reg load HKLM\WinMintApply W:\Windows\System32\config\SYSTEM
+reg load HKLM\WinMintApply %WINLETTER%:\Windows\System32\config\SYSTEM
 if errorlevel 1 (
   echo WinMint: reg load SYSTEM failed
   exit /b 1
@@ -185,93 +253,91 @@ reg add HKLM\WinMintApply\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
 reg add HKLM\WinMintApply\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f
 reg unload HKLM\WinMintApply
-echo WinMint apply complete> "%INSTALL%:\winmint-applied.txt"
-echo WinMint apply complete> "W:\Windows\WinMint.applied"
-rem The markers are already written. A missing wim, a failed shrink, or a failed
-rem reagentc reboots. The next boot sees winmint-applied.txt and shuts down.
-echo WinMint: registering Windows RE...
-if not exist W:\Windows\System32\Recovery\Winre.wim (
-  echo WinMint: Winre.wim missing from the applied image
-  wpeutil reboot
+if errorlevel 1 (
+  echo WinMint: reg unload SYSTEM failed
   exit /b 1
 )
+echo WinMint apply complete> "%INSTALL%:\winmint-applied.txt"
+echo WinMint apply complete> "%WINLETTER%:\Windows\WinMint.applied"
+echo WinMint: registering Windows RE...
+if not exist %WINLETTER%:\Windows\System32\Recovery\Winre.wim (
+  echo WinMint: Winre.wim missing from the applied image. Boot files are in place.
+  goto :winmint_unplug
+)
 set WINRE_BYTES=
-for %%f in ("W:\Windows\System32\Recovery\Winre.wim") do set WINRE_BYTES=%%~zf
+for %%f in ("%WINLETTER%:\Windows\System32\Recovery\Winre.wim") do set WINRE_BYTES=%%~zf
 set WINRE_MB=
 set SHRINK_MB=
 set /a WINRE_MB=(WINRE_BYTES+1048575)/1048576
 set /a SHRINK_MB=WINRE_MB+250
 if not defined SHRINK_MB (
-  echo WinMint: Winre.wim size could not be read
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: Winre.wim size could not be read. Boot files are in place.
+  goto :winmint_unplug
 )
-rem Shrink Windows by the wim size plus 250 MB, then create the recovery partition
-rem in that free space. The inbox Winre.wim stays where the image put it.
+rem Shrink Windows by the wim size plus 250 MB. An existing recovery partition is left in place.
 > "%WORK%\winre.txt" (
   echo select disk %TARGET%
-  echo select volume W
+  echo select volume %WINLETTER%
   echo shrink desired=%SHRINK_MB%
   echo create partition primary
   echo format quick fs=ntfs label=Recovery
-  echo assign letter=R
+  echo assign letter=%RECLETTER%
   echo set id=de94bba4-06d1-4d40-a16a-bfd50179d6ac
   echo gpt attributes=0x8000000000000001
   echo exit
 )
 diskpart /s "%WORK%\winre.txt"
 if errorlevel 1 (
-  echo WinMint: recovery partition failed
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: recovery setup failed. Boot files are in place.
+  goto :winmint_unplug
 )
-if not exist R:\ (
-  echo WinMint: recovery partition failed
-  wpeutil reboot
-  exit /b 1
+if not exist %RECLETTER%:\ (
+  echo WinMint: recovery setup failed. Boot files are in place.
+  goto :winmint_unplug
 )
-if not exist R:\Recovery\WindowsRE mkdir R:\Recovery\WindowsRE
-xcopy /h /y "W:\Windows\System32\Recovery\Winre.wim" "R:\Recovery\WindowsRE\"
+if not exist %RECLETTER%:\Recovery\WindowsRE mkdir %RECLETTER%:\Recovery\WindowsRE
+xcopy /h /y "%WINLETTER%:\Windows\System32\Recovery\Winre.wim" "%RECLETTER%:\Recovery\WindowsRE\"
 if errorlevel 1 (
-  echo WinMint: could not copy Winre.wim to the recovery partition
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: recovery setup failed. Boot files are in place.
+  goto :winmint_unplug
 )
-set REAGENTC=W:\Windows\System32\reagentc.exe
-set BCDEDIT=W:\Windows\System32\bcdedit.exe
+set REAGENTC=%WINLETTER%:\Windows\System32\reagentc.exe
+set BCDEDIT=%WINLETTER%:\Windows\System32\bcdedit.exe
 if not exist "%REAGENTC%" (
-  echo WinMint: reagentc.exe missing from the applied image
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: reagentc.exe missing from the applied image. Boot files are in place.
+  goto :winmint_unplug
 )
 if not exist "%BCDEDIT%" (
-  echo WinMint: bcdedit.exe missing from the applied image
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: bcdedit.exe missing from the applied image. Boot files are in place.
+  goto :winmint_unplug
 )
 set OSGUID=
-for /f "tokens=1,2" %%a in ('"%BCDEDIT%" /store S:\EFI\Microsoft\Boot\BCD /enum {default} /v') do if /i "%%a"=="identifier" if not defined OSGUID set OSGUID=%%b
+for /f "tokens=1,2" %%a in ('"%BCDEDIT%" /store %EFILETTER%:\EFI\Microsoft\Boot\BCD /enum {default} /v') do if /i "%%a"=="identifier" if not defined OSGUID set OSGUID=%%b
 set WINRE_GUID_OK=
 if defined OSGUID if "%OSGUID:~0,1%"=="{" if "%OSGUID:~9,1%"=="-" set WINRE_GUID_OK=1
 if not defined WINRE_GUID_OK (
-  echo WinMint: bcdedit did not return the Windows boot identifier
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: bcdedit did not return the Windows boot identifier. Boot files are in place.
+  goto :winmint_unplug
 )
-"%REAGENTC%" /setreimage /path R:\Recovery\WindowsRE /target W:\Windows
+"%REAGENTC%" /setreimage /path %RECLETTER%:\Recovery\WindowsRE /target %WINLETTER%:\Windows
 if errorlevel 1 (
-  echo WinMint: reagentc /setreimage failed
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: reagentc /setreimage failed. Boot files are in place.
+  goto :winmint_unplug
 )
 "%REAGENTC%" /enable /osguid %OSGUID%
 if errorlevel 1 (
-  echo WinMint: reagentc /enable failed
-  wpeutil reboot
-  exit /b 1
+  echo WinMint: reagentc /enable failed. Boot files are in place.
+  goto :winmint_unplug
 )
 echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
+exit /b 0
+
+:winmint_unplug
+> "%TEMP%\winmint-status.txt" echo Unplug the USB, then turn the laptop on.
+echo WinMint: Unplug the USB, then turn the laptop on.
+timeout /t 30 /nobreak >nul
+wpeutil shutdown
 exit /b 0
 
 :winmint_boot_probe
@@ -309,8 +375,7 @@ exit /b 1
 :winmint_finished
 echo WinMint: already installed. Unplug the USB, then turn the laptop on.
 echo WinMint: the internal disk was not changed.
-wpeutil shutdown
-exit /b 0
+goto :winmint_unplug
 
 :winmint_see_applied
 set HANDED=
@@ -349,6 +414,159 @@ if exist B:\Windows\WinMint.applied set HANDED=1
 diskpart /s "%WORK%\rm%N%.txt" >nul
 goto :eof
 
+:winmint_map_parts
+set EFI_PART=
+set WIN_PART=
+set WIN_COUNT=0
+set BASIC_PART=
+set BASIC_COUNT=0
+set PART_FAIL=
+> "%WORK%\map.txt" (
+  echo select disk %TARGET%
+  echo list partition
+  echo exit
+)
+diskpart /s "%WORK%\map.txt" > "%WORK%\mapout.txt"
+for /f "usebackq tokens=1,2" %%a in ("%WORK%\mapout.txt") do if /i "%%a"=="Partition" if not "%%b"=="###" call :winmint_class_part %%b
+goto :eof
+
+:winmint_class_part
+if defined PART_FAIL goto :eof
+set N=%1
+> "%WORK%\class.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo detail partition
+  echo exit
+)
+diskpart /s "%WORK%\class.txt" > "%WORK%\classout.txt"
+set GUID=
+for /f "usebackq tokens=1,2,3" %%a in ("%WORK%\classout.txt") do if /i "%%a"=="Type" if not defined GUID set GUID=%%c
+if not defined GUID (
+  set PART_FAIL=1
+  goto :eof
+)
+if /i "%GUID%"=="c12a7328-f81f-11d2-ba4b-00a0c93ec93b" (
+  if defined EFI_PART (
+    set PART_FAIL=1
+  ) else (
+    set EFI_PART=%N%
+  )
+  goto :eof
+)
+if /i not "%GUID%"=="ebd0a0a2-b9e5-4433-87c0-68b6b72699c7" goto :eof
+set /a BASIC_COUNT+=1
+set BASIC_PART=%N%
+call :winmint_mount_windows %N%
+goto :eof
+
+:winmint_mount_windows
+set N=%1
+set TRYLETTER=
+for %%L in (V U T) do if not defined TRYLETTER if not exist %%L:\ set TRYLETTER=%%L
+if not defined TRYLETTER (
+  set PART_FAIL=1
+  goto :eof
+)
+call :winmint_assign %N% %TRYLETTER%
+if errorlevel 1 goto :eof
+if exist %TRYLETTER%:\Windows\System32 (
+  set /a WIN_COUNT+=1
+  set WIN_PART=%N%
+)
+> "%WORK%\unmount.txt" (
+  echo select disk %TARGET%
+  echo select partition %N%
+  echo remove letter=%TRYLETTER%
+  echo exit
+)
+diskpart /s "%WORK%\unmount.txt" >nul
+goto :eof
+
+:winmint_take_letter
+set TAKE=
+for %%L in (S W R V U T) do if not defined TAKE call :winmint_letter_free %%L
+if not defined TAKE (
+  set PART_FAIL=1
+  goto :eof
+)
+set %~1=%TAKE%
+goto :eof
+
+:winmint_letter_free
+if exist %1:\ goto :eof
+if /i "%1"=="%EFILETTER%" goto :eof
+if /i "%1"=="%WINLETTER%" goto :eof
+if /i "%1"=="%RECLETTER%" goto :eof
+set TAKE=%1
+goto :eof
+
+:winmint_assign
+set APART=%~1
+set ALETTER=%~2
+> "%WORK%\assign.txt" (
+  echo select disk %TARGET%
+  echo select partition %APART%
+  echo assign letter=%ALETTER%
+  echo exit
+)
+diskpart /s "%WORK%\assign.txt"
+if errorlevel 1 exit /b 1
+if not exist %ALETTER%:\ exit /b 1
+exit /b 0
+
+:winmint_require_target
+call :winmint_volume_disk %1
+if not defined VOLDISK exit /b 1
+if /i not "%VOLDISK%"=="%TARGET%" (
+  echo WinMint: letter %1 is not on the target disk.
+  exit /b 1
+)
+exit /b 0
+
+:winmint_backup_esp
+if exist "%INSTALL%:\winmint-esp-backup\EFI\Microsoft\Boot\BCD" exit /b 0
+mkdir "%INSTALL%:\winmint-esp-backup" 2>nul
+xcopy /e /h /k /y /i "%EFILETTER%:\*" "%INSTALL%:\winmint-esp-backup\"
+if errorlevel 1 exit /b 1
+if not exist "%INSTALL%:\winmint-esp-backup\EFI\Microsoft\Boot\BCD" exit /b 1
+exit /b 0
+
+:winmint_restore_esp
+> "%TEMP%\winmint-status.txt" echo Restoring previous boot files.
+echo WinMint: restoring previous EFI files.
+if not exist "%INSTALL%:\winmint-esp-backup\EFI\Microsoft\Boot\BCD" (
+  echo WinMint: EFI backup is missing.
+  exit /b 1
+)
+xcopy /e /h /k /y /i "%INSTALL%:\winmint-esp-backup\*" "%EFILETTER%:\" >nul
+if errorlevel 1 (
+  echo WinMint: EFI restore failed.
+  exit /b 1
+)
+exit /b 0
+
+:winmint_format_windows
+rem noerr: an already-online disk returns an error. A disk that stays offline fails the format below.
+> "%WORK%\fmt.txt" (
+  echo select disk %TARGET%
+  echo online disk noerr
+  echo attributes disk clear readonly noerr
+  echo select partition %WIN_PART%
+  echo format quick fs=ntfs label=Windows
+  echo assign letter=%WINLETTER%
+  echo exit
+)
+echo WinMint: formatting the Windows partition on disk %TARGET%...
+diskpart /s "%WORK%\fmt.txt"
+if errorlevel 1 (
+  echo WinMint: diskpart failed
+  exit /b 1
+)
+call :winmint_require_target %WINLETTER%
+if errorlevel 1 exit /b 1
+exit /b 0
+
 rem Keeps a fixed disk as a candidate. BOOTDISK is the disk WinPE booted from.
 rem PAYLOADDISK is the disk that holds install.wim. A Type USB line is an extra
 rem skip for a second stick diskpart labels USB. Disk numbers stay discovered.
@@ -385,7 +603,7 @@ if defined OVERRIDE (
 if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
 goto :eof
 
-rem STORAGE_BUS_TYPE from WinMintApply.exe. A failed query refuses before any disk is cleaned.
+rem STORAGE_BUS_TYPE from WinMintApply.exe. A failed query refuses before a disk is chosen.
 :winmint_bus_types
 set WINMINT_BUS_READY=
 set WINMINT_BUS_FAIL=
@@ -394,7 +612,7 @@ if errorlevel 1 set WINMINT_BUS_FAIL=1
 if not defined WINMINT_BUS_FAIL set WINMINT_BUS_READY=1
 goto :eof
 
-rem Case-insensitive substring. The override path cannot call findstr.
+rem One whole detail-disk line, case-insensitive. A short string matches nothing. The override path cannot call findstr.
 :winmint_text_has
 set "WINMINT_HAY=%~1"
 if not defined WINMINT_HAY goto :eof
@@ -402,8 +620,7 @@ if not defined OVERRIDE goto :eof
 call :winmint_fold WINMINT_HAY
 set "WINMINT_NEED=%OVERRIDE%"
 call :winmint_fold WINMINT_NEED
-call set "WINMINT_FOLDED=%%WINMINT_HAY:%WINMINT_NEED%=%%"
-if not "%WINMINT_FOLDED%"=="%WINMINT_HAY%" set HIT=1
+if "%WINMINT_HAY%"=="%WINMINT_NEED%" set HIT=1
 goto :eof
 
 :winmint_fold
@@ -456,11 +673,12 @@ if not defined SEEN if not "%~1"=="nowait" (
 )
 goto :eof
 
-rem Called from the install retry. Each call is parsed afresh, so BOOTDISK and
-rem WINMINT_BOOT_TAG set on an earlier try are visible here.
+rem Called from the install retry. A missing boot letter is a refusal, not a guess.
 :winmint_find_install
-if not defined BOOTDISK if not defined WINMINT_BOOT_TAG call :winmint_boot_disk
-if not defined BOOTDISK if not defined WINMINT_BOOT_TAG (
+if defined WINMINT_BOOT_TAG goto :eof
+if not defined BOOTDISK call :winmint_boot_disk
+if defined WINMINT_BOOT_TAG goto :eof
+if not defined BOOTDISK (
   mountvol /e >nul 2>&1
   timeout /t 1 /nobreak >nul 2>&1
   goto :eof
@@ -487,13 +705,13 @@ call :winmint_volume_disk %BOOTLETTER%
 if defined VOLDISK set "BOOTDISK=%VOLDISK%"
 goto :eof
 
-rem Tag mode accepts the first volume whose disk number can be read. When the
-rem boot disk is known, a volume on any other disk is left alone.
+rem The payload must sit on the recorded boot disk. A missing boot disk is refused.
 :winmint_accept_install
 set "CANDIDATE=%~1"
+if not defined BOOTDISK goto :eof
 call :winmint_volume_disk %CANDIDATE%
 if not defined VOLDISK goto :eof
-if defined BOOTDISK if /i not "%VOLDISK%"=="%BOOTDISK%" goto :eof
+if /i not "%VOLDISK%"=="%BOOTDISK%" goto :eof
 set "INSTALL=%CANDIDATE%"
 set "PAYLOADDISK=%VOLDISK%"
 goto :eof
@@ -515,8 +733,24 @@ goto :eof
 :winmint_parse_volume_disk
 if not exist "%~1" goto :eof
 set VOLDISK=
+set VOLHITS=0
+set LASTDISK=
 for /f "usebackq tokens=1,2,3" %%a in ("%~1") do (
-  if /i "%%a"=="Disk" if not "%%b"=="###" if not defined VOLDISK set "VOLDISK=%%b"
-  if "%%a"=="*" if /i "%%b"=="Disk" if not "%%c"=="###" set "VOLDISK=%%c"
+  if "%%a"=="*" if /i "%%b"=="Disk" if not "%%c"=="###" (
+    set /a VOLHITS+=1
+    set "LASTDISK=%%c"
+  )
 )
+if "%VOLHITS%"=="1" set "VOLDISK=%LASTDISK%"
+goto :eof
+
+:winmint_audit_buses
+if not exist "%WORK%\buses.txt" goto :eof
+for /f "usebackq tokens=1,2" %%a in ("%LIST%") do if /i "%%a"=="Disk" if not "%%b"=="###" call :winmint_need_bus %%b
+goto :eof
+
+:winmint_need_bus
+set FOUND=
+for /f "usebackq tokens=1,2" %%a in ("%WORK%\buses.txt") do if "%%a"=="%1" set FOUND=1
+if not defined FOUND set WINMINT_BUS_FAIL=1
 goto :eof

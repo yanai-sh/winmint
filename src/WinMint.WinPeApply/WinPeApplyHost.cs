@@ -14,7 +14,11 @@ namespace WinMint.WinPeApply;
 internal static class WinPeApplyHost
 {
     internal const string LaunchName = "LaunchApply.cmd";
+    internal const string FormatFlagName = "winmint-format-started.txt";
     private const string QuickEditSkip = "WINMINT_QE";
+
+    /// <summary>Escape before format stops the launcher. Escape after the format flag exists does not.</summary>
+    internal static bool KillForEscape(bool requested, bool formatStarted) => requested && !formatStarted;
 
     private static int Main(string[] args)
     {
@@ -31,11 +35,17 @@ internal static class WinPeApplyHost
     /// </summary>
     internal static int Dispatch(string[] args, Func<int> runApply, Action showSplash)
     {
-        // winpeshl cannot pass arguments. LaunchApply calls this mode itself before it chooses a disk.
+        // winpeshl cannot pass arguments. LaunchApply calls these modes itself before it formats.
+        if (args.Length == 3 && string.Equals(args[0], "--image-fits", StringComparison.Ordinal))
+        {
+            return ImageFit.Run(args[1], args[2]);
+        }
+
         if (args.Length == 2 && string.Equals(args[0], "--bus-types", StringComparison.Ordinal))
         {
-            File.WriteAllText(args[1], DiskBusList.Render(DiskBusList.Query()), Encoding.ASCII);
-            return 0;
+            (bool complete, List<(int Disk, string Bus)> rows) = DiskBusList.Query();
+            File.WriteAllText(args[1], DiskBusList.Render(rows), Encoding.ASCII);
+            return complete ? 0 : 1;
         }
 
         if (args.Length == 1 && string.Equals(args[0], "--splash", StringComparison.Ordinal))
@@ -69,10 +79,7 @@ internal static class WinPeApplyHost
             else
             {
                 started = true;
-                if (WaitForApply(apply, out code))
-                {
-                    return 0;
-                }
+                WaitForApply(apply, out code);
             }
         }
 
@@ -86,8 +93,8 @@ internal static class WinPeApplyHost
             : ShowFailure(system32, log, holdFailureConsole, code);
     }
 
-    /// <summary>Returns true when ESC closed the splash and the launcher was stopped.</summary>
-    private static bool WaitForApply(Process apply, out int code)
+    /// <summary>Escape before format returns a failure. Escape after the format flag exists lets apply finish.</summary>
+    private static void WaitForApply(Process apply, out int code)
     {
         bool escape = string.Equals(
             Environment.GetEnvironmentVariable(ApplyBootSplash.EscapeVariable),
@@ -97,12 +104,13 @@ internal static class WinPeApplyHost
         {
             apply.WaitForExit();
             code = apply.ExitCode;
-            return false;
+            return;
         }
 
+        string formatFlag = Path.Combine(Path.GetTempPath(), FormatFlagName);
         while (!apply.HasExited)
         {
-            if (ApplyBootSplash.EscapeRequested)
+            if (KillForEscape(ApplyBootSplash.EscapeRequested, File.Exists(formatFlag)))
             {
                 try
                 {
@@ -113,19 +121,18 @@ internal static class WinPeApplyHost
                 }
 
                 apply.WaitForExit();
-                code = 0;
-                return true;
+                code = 1;
+                return;
             }
 
             if (apply.WaitForExit(50))
             {
                 code = apply.ExitCode;
-                return false;
+                return;
             }
         }
 
         code = apply.ExitCode;
-        return false;
     }
 
     private static ProcessStartInfo HiddenLaunch(string system32, string logPath)

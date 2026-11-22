@@ -25,11 +25,12 @@ $seenLoopAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN cal
 if ($unarmedAt -lt 0 -or $initPeAt -le $unarmedAt -or $seenLoopAt -le $initPeAt) {
     throw 'unarmed shutdown must run before call :winmint_init_pe, and that call must run before the payload search'
 }
-$confirmAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install', [StringComparison]::Ordinal)
+$confirmAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined PAYLOADDISK if not defined WINMINT_BOOT_TAG call :winmint_find_install', [StringComparison]::Ordinal)
 $reinstallDel = $launch.IndexOf('del /f /q "%INSTALL%:\winmint-reinstall.txt"', [StringComparison]::Ordinal)
 $bootMiss = $launch.IndexOf('install.wim not found on the boot disk', [StringComparison]::Ordinal)
-if ($confirmAt -lt 0 -or $reinstallDel -lt 0 -or $bootMiss -lt 0 -or $confirmAt -ge $bootMiss -or $bootMiss -ge $reinstallDel) {
-    throw 'WinPE must confirm the payload letter before it consumes winmint-reinstall.txt'
+$bootexAt = $launch.IndexOf('/offline /bootex', [StringComparison]::Ordinal)
+if ($confirmAt -lt 0 -or $reinstallDel -lt 0 -or $bootMiss -lt 0 -or $bootexAt -lt 0 -or $confirmAt -ge $bootMiss -or $bootexAt -ge $reinstallDel) {
+    throw 'WinPE must confirm the payload letter and write boot files before it consumes winmint-reinstall.txt'
 }
 if ($launch.Substring($probeLabel) -notmatch 'WINMINT USB BOOT PROBE PASSED' `
     -or $launch.Substring($probeLabel) -notmatch 'winmint\.usb-boot-probe/v1' `
@@ -187,7 +188,7 @@ if ($gateStart -lt 0 -or $gateStop -le $gateStart -or $seeStart -lt 0 -or $seeSt
     throw 'LaunchApply install-file gate layout changed — update this test'
 }
 $gate = foreach ($line in $launchLines[$gateStart..$gateStop]) {
-    if ($line -eq 'for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install') {
+        if ($line -eq 'for /L %%i in (1,1,10) do if not defined PAYLOADDISK if not defined WINMINT_BOOT_TAG call :winmint_find_install') {
         'set PAYLOADDISK=9'
     }
     elseif ($line -eq 'set WORK=%TEMP%\winmint') {
@@ -270,7 +271,9 @@ try {
         [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install')
         [IO.File]::WriteAllText('Z:\winmint-reinstall.txt', 'again')
     }
-    if (Test-Path -LiteralPath 'Z:\winmint-reinstall.txt') { throw 'reinstall request must be consumed' }
+    if (-not (Test-Path -LiteralPath 'Z:\winmint-reinstall.txt')) {
+        throw 'reinstall request must stay until boot files are written'
+    }
     Assert-InstallGate 'reinstall after a finished apply reaches install' 'ARMED' {
         [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install')
         [IO.File]::WriteAllText('Z:\winmint-applied.txt', 'done')

@@ -118,20 +118,26 @@ public class WinPeApplyPlanTests
         Assert.Contains("wpeutil reboot", payload, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("wpeutil shutdown", payload, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("winmint-applied.txt", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("echo clean", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("delete partition", payload, StringComparison.OrdinalIgnoreCase);
         Assert.True(
             payload.IndexOf("winmint-applied.txt", StringComparison.Ordinal)
-                < payload.IndexOf("echo clean", StringComparison.Ordinal),
-            "A finished apply must be noticed before diskpart clean.");
+                < payload.IndexOf("echo format quick fs=ntfs label=Windows", StringComparison.Ordinal),
+            "A finished apply must be noticed before the Windows partition is formatted.");
         Assert.Contains("LabConfig", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("setup.exe", payload, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/legacy", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("select disk 0", payload, StringComparison.Ordinal);
         Assert.Contains("PEBootRamdiskSourceDrive", payload, StringComparison.Ordinal);
         Assert.Contains("if \"%N%\"==\"%BOOTDISK%\"", payload, StringComparison.Ordinal);
+        int formatAt = payload.IndexOf("echo format quick fs=ntfs label=Windows", StringComparison.Ordinal);
         Assert.True(
             payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal)
-                < payload.IndexOf("echo clean", StringComparison.Ordinal),
-            "The WinPE boot disk must be resolved before diskpart clean.");
+                < formatAt,
+            "The WinPE boot disk must be resolved before the Windows partition is formatted.");
+        Assert.True(
+            payload.IndexOf("winmint-esp-backup", StringComparison.Ordinal) is int backupAt && backupAt >= 0 && backupAt < formatAt,
+            "The EFI partition must be copied before the Windows partition is formatted.");
         int installAt = payload.IndexOf("if not exist \"%INSTALL%:\\winmint-install.txt\"", StringComparison.Ordinal);
         int seeAt = payload.IndexOf("call :winmint_see_payload", StringComparison.Ordinal);
         int findAt = payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal);
@@ -154,21 +160,24 @@ public class WinPeApplyPlanTests
         Assert.Contains("<EnableNetwork>false</EnableNetwork>", wpeinitXml, StringComparison.Ordinal);
         Assert.Contains("processorArchitecture=\"arm64\"", wpeinitXml, StringComparison.Ordinal);
         Assert.Contains("pass=\"windowsPE\"", wpeinitXml, StringComparison.Ordinal);
-        Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("create partition efi", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);
         Assert.Contains("de94bba4-06d1-4d40-a16a-bfd50179d6ac", payload, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("gpt attributes=0x8000000000000001", payload, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("/setreimage /path R:\\Recovery\\WindowsRE /target W:\\Windows", payload, StringComparison.Ordinal);
+        Assert.Contains("/setreimage /path %RECLETTER%:\\Recovery\\WindowsRE /target %WINLETTER%:\\Windows", payload, StringComparison.Ordinal);
         int bootexAt = payload.IndexOf("/offline /bootex", StringComparison.Ordinal);
+        int bootFilesAt = payload.IndexOf(
+            "echo WinMint boot files> \"%INSTALL%:\\winmint-boot-files.txt\"",
+            StringComparison.Ordinal);
         int payloadMarkerAt = payload.IndexOf(
             "echo WinMint apply complete> \"%INSTALL%:\\winmint-applied.txt\"",
             StringComparison.Ordinal);
         int windowsMarkerAt = payload.IndexOf(
-            "echo WinMint apply complete> \"W:\\Windows\\WinMint.applied\"",
+            "echo WinMint apply complete> \"%WINLETTER%:\\Windows\\WinMint.applied\"",
             StringComparison.Ordinal);
-        int reagentcAt = payload.IndexOf("/setreimage /path R:\\Recovery\\WindowsRE", StringComparison.Ordinal);
-        Assert.True(bootexAt >= 0 && payloadMarkerAt > bootexAt && windowsMarkerAt > bootexAt && reagentcAt > windowsMarkerAt,
-            "Both apply markers must be written after bcdboot and before reagentc.");
+        int reagentcAt = payload.IndexOf("/setreimage /path %RECLETTER%:\\Recovery\\WindowsRE", StringComparison.Ordinal);
+        Assert.True(bootexAt >= 0 && bootFilesAt > bootexAt && payloadMarkerAt > bootFilesAt && windowsMarkerAt > bootexAt && reagentcAt > windowsMarkerAt,
+            "Boot-file and apply markers must be written after bcdboot, and reagentc after the apply markers.");
         Assert.Contains("--bus-types", payload, StringComparison.Ordinal);
         Assert.Contains("if /i \"%BUSTYPE%\"==\"USB\"", payload, StringComparison.Ordinal);
         Assert.Contains("if /i \"%BUSTYPE%\"==\"SD\"", payload, StringComparison.Ordinal);

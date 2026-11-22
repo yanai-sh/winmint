@@ -45,20 +45,42 @@ internal static class DiskBusList
         _ => "Other",
     };
 
-    internal static List<(int Disk, string Bus)> Query()
+    /// <summary>
+    /// Every disk from 0 through the last one that opened. A hole or an empty scan is incomplete:
+    /// LaunchApply refuses to format when this is false.
+    /// </summary>
+    internal static (bool Complete, List<(int Disk, string Bus)> Rows) Query()
     {
         List<(int Disk, string Bus)> rows = [];
         for (int disk = 0; disk < 32; disk++)
         {
             if (!TryQuery(disk, out string bus))
             {
-                break;
+                continue;
             }
 
             rows.Add((disk, bus));
         }
 
-        return rows;
+        return (IsComplete(rows), rows);
+    }
+
+    internal static bool IsComplete(IReadOnlyList<(int Disk, string Bus)> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Disk != i)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static unsafe bool TryQuery(int disk, out string bus)

@@ -22,6 +22,21 @@ internal static class ApplyBootSplash
 
     internal static bool EscapeRequested => Volatile.Read(ref s_escapeRequested) != 0;
 
+    internal static string LastStatusLine(string text)
+    {
+        string chosen = "";
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.Length > 0)
+            {
+                chosen = line;
+            }
+        }
+
+        return chosen;
+    }
+
     internal static void RequestEscape() => Interlocked.Exchange(ref s_escapeRequested, 1);
 
     internal static void EnablePerMonitorV2()
@@ -483,11 +498,13 @@ internal static class ApplyBootSplash
                     }
 
                     DrawProgress(hdc, cx, progressY);
+                    DrawStatus(hdc, rect, progressY);
                 }
                 else
                 {
                     BrandMark.Draw(hdc, cx, cy - 28);
                     DrawProgress(hdc, cx, cy + 78);
+                    DrawStatus(hdc, rect, cy + 78);
                 }
             }
             finally
@@ -515,6 +532,74 @@ internal static class ApplyBootSplash
                 COLORREF color = i == lit ? new COLORREF(0x00FFFFFF) : new COLORREF(0x005C5C5C);
                 int x = origin + (i * gap);
                 FillEllipse(hdc, x - radius, cy - radius, x + radius, cy + radius, color);
+            }
+        }
+
+        private static void DrawStatus(HDC hdc, RECT rect, int y)
+        {
+            string text = ApplyBootSplash.LastStatusLine(ReadStatusFile());
+            if (text.Length == 0)
+            {
+                return;
+            }
+
+            unsafe
+            {
+                fixed (char* face = "Segoe UI")
+                fixed (char* chars = text)
+                {
+                    HFONT font = PInvoke.CreateFont(
+                        -18,
+                        0,
+                        0,
+                        0,
+                        400,
+                        0,
+                        0,
+                        0,
+                        FONT_CHARSET.DEFAULT_CHARSET,
+                        FONT_OUTPUT_PRECISION.OUT_DEFAULT_PRECIS,
+                        FONT_CLIP_PRECISION.CLIP_DEFAULT_PRECIS,
+                        FONT_QUALITY.CLEARTYPE_QUALITY,
+                        0,
+                        face);
+                    if (font.IsNull)
+                    {
+                        return;
+                    }
+
+                    HGDIOBJ old = PInvoke.SelectObject(hdc, font);
+                    _ = PInvoke.SetBkMode(hdc, BACKGROUND_MODE.TRANSPARENT);
+                    _ = PInvoke.SetTextColor(hdc, new COLORREF(0x00FFFFFF));
+                    RECT box = new()
+                    {
+                        left = rect.left + 24,
+                        top = y + 16,
+                        right = rect.right - 24,
+                        bottom = y + 52,
+                    };
+                    _ = PInvoke.DrawText(
+                        hdc,
+                        chars,
+                        text.Length,
+                        ref box,
+                        DRAW_TEXT_FORMAT.DT_CENTER | DRAW_TEXT_FORMAT.DT_NOPREFIX | DRAW_TEXT_FORMAT.DT_SINGLELINE | DRAW_TEXT_FORMAT.DT_END_ELLIPSIS);
+                    _ = PInvoke.SelectObject(hdc, old);
+                    _ = PInvoke.DeleteObject(font);
+                }
+            }
+        }
+
+        private static string ReadStatusFile()
+        {
+            try
+            {
+                string path = Path.Combine(Path.GetTempPath(), "winmint-status.txt");
+                return File.Exists(path) ? File.ReadAllText(path) : "";
+            }
+            catch (IOException)
+            {
+                return "";
             }
         }
 

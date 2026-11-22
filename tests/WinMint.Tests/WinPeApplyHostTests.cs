@@ -5,6 +5,14 @@ namespace WinMint.Tests;
 public class WinPeApplyHostTests
 {
     [Fact]
+    public void Escape_before_format_stops_the_launcher()
+    {
+        Assert.True(WinPeApplyHost.KillForEscape(requested: true, formatStarted: false));
+        Assert.False(WinPeApplyHost.KillForEscape(requested: true, formatStarted: true));
+        Assert.False(WinPeApplyHost.KillForEscape(requested: false, formatStarted: false));
+    }
+
+    [Fact]
     public void Missing_launcher_fails_without_opening_a_console()
     {
         string dir = Directory.CreateTempSubdirectory("winmint-winpe-apply").FullName;

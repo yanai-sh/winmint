@@ -39,9 +39,10 @@ $harness = @('@echo off', 'setlocal EnableExtensions', 'set INSTALL=Z') +
         elseif ($_ -match 'WinMintApply.exe') { 'rem pre-seeded' }
         else { $_ } })
 
-foreach ($danger in 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format') {
+foreach ($danger in 'clean', 'Apply-Image', 'bcdboot', 'wpeutil') {
     if ($harness -match $danger) { throw "refusing to run: '$danger' leaked into the harness" }
 }
+if ($harness -match '(?im)(^|[^\w-])format(\s|$)') { throw "refusing to run: 'format' leaked into the harness" }
 
 Set-Content -LiteralPath $cmdPath -Value ($harness -join "`r`n") -Encoding ascii
 New-Item -ItemType Directory -Force -Path $usb | Out-Null
@@ -156,8 +157,13 @@ try {
     }
     [IO.File]::WriteAllText($parseSample, "Disk 0    Online`r`n")
     $parsed = (& cmd /c "`"$parseCmd`" `"$parseSample`"") -join ' '
-    if ($parsed -notmatch 'VOLDISK=0') {
-        $failures += "detail volume plain line`n    expected: VOLDISK=0`n    actual:   $parsed"
+    if ($parsed -notmatch 'VOLDISK=\s*$') {
+        $failures += "detail volume plain line`n    expected: VOLDISK empty`n    actual:   $parsed"
+    }
+    [IO.File]::WriteAllText($parseSample, "* Disk 1    Online`r`n* Disk 4    Online`r`n")
+    $parsed = (& cmd /c "`"$parseCmd`" `"$parseSample`"") -join ' '
+    if ($parsed -notmatch 'VOLDISK=\s*$') {
+        $failures += "detail volume two star lines`n    expected: VOLDISK empty`n    actual:   $parsed"
     }
 
     $acceptHarness = @(
@@ -188,7 +194,7 @@ try {
     }
     Assert-Accept 'payload on the boot disk' '1' '1' 'INSTALL=Z PAYLOADDISK=1'
     Assert-Accept 'payload on another disk is ignored' '1' '2' 'INSTALL= PAYLOADDISK='
-    Assert-Accept 'tag mode keeps the first resolved disk' '-' '3' 'INSTALL=Z PAYLOADDISK=3'
+    Assert-Accept 'missing boot disk refuses the payload' '-' '3' 'INSTALL= PAYLOADDISK='
 }
 finally {
     Remove-Item $parseCmd, $parseSample, $acceptCmd -Force -ErrorAction SilentlyContinue

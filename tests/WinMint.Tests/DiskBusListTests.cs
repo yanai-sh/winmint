@@ -16,6 +16,16 @@ public class DiskBusListTests
     }
 
     [Fact]
+    public void IsComplete_rejects_an_empty_scan_and_a_hole()
+    {
+        Assert.False(DiskBusList.IsComplete([]));
+        Assert.True(DiskBusList.IsComplete([(0, "NVMe")]));
+        Assert.True(DiskBusList.IsComplete([(0, "USB"), (1, "NVMe")]));
+        Assert.False(DiskBusList.IsComplete([(0, "NVMe"), (2, "USB")]));
+        Assert.False(DiskBusList.IsComplete([(1, "NVMe")]));
+    }
+
+    [Fact]
     public void Render_prints_disk_number_and_bus_name()
     {
         string text = DiskBusList.Render([(0, "USB"), (1, "NVMe")]);

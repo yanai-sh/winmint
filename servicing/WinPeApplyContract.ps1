@@ -79,24 +79,33 @@ function Get-WinPeApplyDefect {
             $defects += 'LaunchApply.cmd predates the target-disk guard (no winmint_pick): it would erase disk 0'
         }
         # The stick is the volume WinPE booted from, not a diskpart Type line that says USB.
-        # The boot-disk subroutine is defined below `clean`; the call that runs first is what matters.
+        # The boot-disk subroutine is defined below the format; the call that runs first is what matters.
         $findAt = $body.IndexOf('call :winmint_find_install')
-        $bootCleanAt = $body.IndexOf('echo clean')
+        $formatAt = $body.IndexOf('echo format quick fs=ntfs label=Windows')
+        if ($body -match '(?m)^[ \t]*echo clean\b') {
+            $defects += 'LaunchApply.cmd must not clean the whole disk'
+        }
+        if ($body -match 'delete partition') {
+            $defects += 'LaunchApply.cmd must not delete an existing partition'
+        }
         if ($body -notmatch 'PEBootRamdiskSourceDrive' -or $body -notmatch 'call :winmint_boot_disk' -or
             $body -notmatch 'if "%N%"=="%BOOTDISK%"' -or
-            $findAt -lt 0 -or $bootCleanAt -lt 0 -or $findAt -ge $bootCleanAt) {
-            $defects += 'LaunchApply.cmd must resolve PEBootRamdiskSourceDrive and skip that disk before diskpart clean'
+            $findAt -lt 0 -or $formatAt -lt 0 -or $findAt -ge $formatAt) {
+            $defects += 'LaunchApply.cmd must resolve PEBootRamdiskSourceDrive and skip that disk before it formats the Windows partition'
+        }
+        $backupAt = $body.IndexOf('winmint-esp-backup')
+        if ($backupAt -lt 0 -or $backupAt -ge $formatAt) {
+            $defects += 'LaunchApply.cmd must copy the EFI partition to winmint-esp-backup before it formats the Windows partition'
         }
         # HKCU\Console\QuickEdit is read when the console is created. A Hyper-V click in Select Mode
         # pauses DISM until another click/Enter; media without this line still has that stall.
         if ($body -notmatch 'reg add HKCU\\Console /v QuickEdit /t REG_DWORD /d 0 /f') {
             $defects += 'LaunchApply.cmd must disable console Quick Edit (Hyper-V click pauses DISM)'
         }
-        # A second USB boot used to reach `clean` again. The marker has to be tested first.
+        # A second USB boot used to reach format again. The marker has to be tested first.
         $appliedAt = $body.IndexOf('winmint-applied.txt')
-        $cleanAt = $body.IndexOf('echo clean')
-        if ($appliedAt -lt 0 -or $cleanAt -lt 0 -or $appliedAt -ge $cleanAt) {
-            $defects += 'LaunchApply.cmd must notice winmint-applied.txt before diskpart clean'
+        if ($appliedAt -lt 0 -or $formatAt -lt 0 -or $appliedAt -ge $formatAt) {
+            $defects += 'LaunchApply.cmd must notice winmint-applied.txt before it formats the Windows partition'
         }
         if ($body -notmatch 'wpeutil shutdown') {
             $defects += 'LaunchApply.cmd must shut down instead of erasing when WinMint is already installed'
@@ -112,8 +121,8 @@ function Get-WinPeApplyDefect {
             $defects += 'LaunchApply.cmd must bcdboot /offline /bootex (2023 UEFI CA boot manager)'
         }
         # WinRE is registered from the recovery partition created after apply, not from System32\Recovery.
-        if ($body -notmatch '/setreimage /path R:\\Recovery\\WindowsRE /target W:\\Windows') {
-            $defects += 'LaunchApply.cmd must register WinRE from R:\Recovery\WindowsRE'
+        if ($body -notmatch '/setreimage /path %RECLETTER%:\\Recovery\\WindowsRE /target %WINLETTER%:\\Windows') {
+            $defects += 'LaunchApply.cmd must register WinRE from the recovery letter'
         }
         # A bare wpeinit waits on Wi-Fi DHCP. The blue desktop never reaches shutdown.
         $earlyAt = $body.IndexOf('if not exist "%SEEN%:\winmint-install.txt"')
