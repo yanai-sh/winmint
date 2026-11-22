@@ -91,6 +91,7 @@ internal static class ApplyBootSplash
     {
         private const uint WmClose = 0x0010;
         private const uint WmPaint = 0x000F;
+        private const uint WmLButtonDown = 0x0201;
         private const uint WmTick = 0x0400;
 
         private const int VkEscape = 0x1B;
@@ -229,6 +230,11 @@ internal static class ApplyBootSplash
                         continue;
                     }
 
+                    if (_picker && msg.message == WmLButtonDown && msg.hwnd == hwnd && SelectAt(ClickX(msg.lParam), ClickY(msg.lParam)))
+                    {
+                        Paint(hwnd, beginPaint: false);
+                    }
+
                     if (msg.message == WmClose)
                     {
                         _hwnd?.Dispose();
@@ -275,6 +281,28 @@ internal static class ApplyBootSplash
             bool fire = held == 1 || (allowRepeat && held >= 8 && (held - 8) % 3 == 0);
             return fire && act();
         }
+
+        private bool SelectAt(int x, int y)
+        {
+            if (_painter is null)
+            {
+                return false;
+            }
+
+            int row = _painter.RowAt(x, y);
+            if (row < 0 || row == _focus)
+            {
+                return false;
+            }
+
+            _focus = row;
+            _marked = -1;
+            return true;
+        }
+
+        private static int ClickX(LPARAM packed) => unchecked((short)(packed.Value & 0xFFFF));
+
+        private static int ClickY(LPARAM packed) => unchecked((short)((packed.Value >> 16) & 0xFFFF));
 
         private bool Move(int direction)
         {

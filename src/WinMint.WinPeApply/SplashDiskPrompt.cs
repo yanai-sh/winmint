@@ -7,13 +7,15 @@ using Windows.Win32.Graphics.Gdi;
 namespace WinMint.WinPeApply;
 
 /// <summary>
-/// Centered disk lines under the large lockup. A frame shows the focused row.
-/// The line under the lockup says how Enter marks it. There is no second control.
+/// Centered disk lines under the large lockup. A mint asterisk marks the focused row.
+/// Arrow keys and a click move it. Enter marks that disk. There is no second control.
 /// </summary>
 internal static class SplashDiskPrompt
 {
     internal const string Heading = "Target disk";
-    internal const string Lead = "Nothing is selected. Press the arrow keys.";
+    internal const string Lead = "Nothing is selected. Press the arrow keys, or click a disk.";
+    internal const string Asterisk = "*";
+    internal const int AsteriskWidth = 28;
     internal const int HeroGap = 16;
 
     internal static int PromptTop(int heroBottom, int dpi) => heroBottom + Px(HeroGap, dpi);
@@ -102,20 +104,44 @@ internal static class SplashDiskPrompt
         int perLine = Math.Max(8, column / Px(9, dpi));
         return Math.Clamp((text.Length + perLine - 1) / perLine, 1, 4);
     }
+
+    internal static int RowAt(PromptLayout layout, int rows, int x, int y)
+    {
+        if (rows <= 0 || layout.List.H <= 0 || x < layout.List.X || x >= layout.List.Right || y < layout.List.Y)
+        {
+            return -1;
+        }
+
+        int stride = layout.RowHeight + layout.RowGap;
+        int offset = y - layout.List.Y;
+        if (stride <= 0 || offset < 0 || offset >= layout.List.H)
+        {
+            return -1;
+        }
+
+        int index = offset / stride;
+        int within = offset - (index * stride);
+        if (within >= layout.RowHeight || index >= rows)
+        {
+            return -1;
+        }
+
+        return index;
+    }
 }
 
 internal sealed class SplashPromptPainter : IDisposable
 {
-    private const int RadiusPx = 4;
-
     private static readonly COLORREF Ink = new(0x00FBF7F3);
     private static readonly COLORREF Mint = new(0x008CD04C);
     private static readonly COLORREF Hair = new(0x005C5C5C);
-    private static readonly COLORREF Ground = new(0x00000000);
 
     private HFONT _body;
     private int _dpi = 96;
     private bool _ready;
+    private SplashDiskPrompt.PromptLayout _layout;
+    private int _rows;
+    private bool _hasLayout;
 
     internal void Paint(HDC hdc, RECT client, int dpi, IReadOnlyList<SplashDisk> disks, int focus, int marked)
     {
@@ -124,6 +150,9 @@ internal sealed class SplashPromptPainter : IDisposable
         int minY = HeroBand(hdc, client, dpi);
         string status = Status(disks, focus, marked);
         SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, dpi, disks.Count, minY, status);
+        _layout = layout;
+        _rows = disks.Count;
+        _hasLayout = true;
         EnsureFonts(dpi);
         Text(hdc, _body, Ink, status, client, layout.Status, wrap: true, center: true);
 
@@ -134,6 +163,8 @@ internal sealed class SplashPromptPainter : IDisposable
     }
 
     public void Dispose() => FreeFonts();
+
+    internal int RowAt(int x, int y) => _hasLayout ? SplashDiskPrompt.RowAt(_layout, _rows, x, y) : -1;
 
     private static string Status(IReadOnlyList<SplashDisk> disks, int focus, int marked)
     {
@@ -154,40 +185,32 @@ internal sealed class SplashPromptPainter : IDisposable
     {
         int y = client.top + layout.List.Y + (index * (layout.RowHeight + layout.RowGap));
         int x = client.left + layout.List.X;
+        Hairline(hdc, x, y + layout.RowHeight - 1, x + layout.List.W);
+        int markW = SplashDiskPrompt.Px(SplashDiskPrompt.AsteriskWidth, _dpi);
         if (focused)
         {
-            Frame(hdc, x, y, layout.List.W, layout.RowHeight);
-        }
-        else
-        {
-            Hairline(hdc, x, y + layout.RowHeight - 1, x + layout.List.W);
+            Text(
+                hdc,
+                _body,
+                Mint,
+                SplashDiskPrompt.Asterisk,
+                default,
+                new SplashDiskPrompt.Box(x, y, markW, layout.RowHeight),
+                wrap: false,
+                absolute: true,
+                center: true);
         }
 
         Text(
             hdc,
             _body,
-            focused ? Mint : Ink,
+            Ink,
             SplashDiskPrompt.RowLabel(disk),
             default,
-            new SplashDiskPrompt.Box(x, y, layout.List.W, layout.RowHeight),
+            new SplashDiskPrompt.Box(x + markW, y, Math.Max(1, layout.List.W - markW), layout.RowHeight),
             wrap: false,
             absolute: true,
             center: true);
-    }
-
-    private void Frame(HDC hdc, int x, int y, int w, int h)
-    {
-        int corner = Math.Max(2, SplashDiskPrompt.Px(RadiusPx, _dpi) * 2);
-        HBRUSH brush = PInvoke.CreateSolidBrush(Ground);
-        int weight = Math.Max(1, SplashDiskPrompt.Px(2, _dpi));
-        HPEN pen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, weight, Mint);
-        HGDIOBJ oldBrush = PInvoke.SelectObject(hdc, brush);
-        HGDIOBJ oldPen = PInvoke.SelectObject(hdc, pen);
-        _ = PInvoke.RoundRect(hdc, x, y, x + w, y + h, corner, corner);
-        _ = PInvoke.SelectObject(hdc, oldBrush);
-        _ = PInvoke.SelectObject(hdc, oldPen);
-        _ = PInvoke.DeleteObject(brush);
-        _ = PInvoke.DeleteObject(pen);
     }
 
     private static void Hairline(HDC hdc, int x0, int y, int x1)
