@@ -49,3 +49,12 @@ CreateFile
 DeviceIoControl
 STORAGE_BUS_TYPE
 IOCTL_STORAGE_QUERY_PROPERTY
+CreateFont
+DrawText
+SetBkMode
+SetTextColor
+CreatePen
+RoundRect
+GetDpiForWindow
+SetForegroundWindow
+SetWindowText

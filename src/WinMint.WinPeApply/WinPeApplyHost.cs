@@ -19,6 +19,18 @@ internal static class WinPeApplyHost
     private static int Main(string[] args)
     {
         ApplyBootSplash.EnablePerMonitorV2();
+        return Dispatch(
+            args,
+            () => Run(AppContext.BaseDirectory, holdFailureConsole: true),
+            ApplyBootSplash.HoldForPreview);
+    }
+
+    /// <summary>
+    /// <c>--splash</c> is the host preview of the disk prompt. It does not start LaunchApply.
+    /// <c>--bus-types</c> writes bus types for LaunchApply before it chooses a disk.
+    /// </summary>
+    internal static int Dispatch(string[] args, Func<int> runApply, Action showSplash)
+    {
         // winpeshl cannot pass arguments. LaunchApply calls this mode itself before it chooses a disk.
         if (args.Length == 2 && string.Equals(args[0], "--bus-types", StringComparison.Ordinal))
         {
@@ -26,7 +38,13 @@ internal static class WinPeApplyHost
             return 0;
         }
 
-        return Run(AppContext.BaseDirectory, holdFailureConsole: true);
+        if (args.Length == 1 && string.Equals(args[0], "--splash", StringComparison.Ordinal))
+        {
+            showSplash();
+            return 0;
+        }
+
+        return runApply();
     }
 
     internal static int Run(string system32, bool holdFailureConsole)
