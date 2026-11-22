@@ -82,12 +82,34 @@ internal static class BrandLockup
         }
     }
 
+    /// <summary>Client-relative frame of the apply splash lockup.</summary>
+    internal static bool TryFrame(int clientW, int clientH, out int x, out int y, out int width, out int height)
+    {
+        x = 0;
+        y = 0;
+        width = 0;
+        height = 0;
+        if (!TrySize(clientW, clientH, out width, out height))
+        {
+            return false;
+        }
+
+        x = (clientW - width) / 2;
+        y = ((clientH - height) / 2) - (clientH / 18);
+        if (y < 0)
+        {
+            y = 0;
+        }
+
+        return true;
+    }
+
     internal static bool TryBlit(HDC hdc, RECT client, out int bottom)
     {
         bottom = 0;
         int clientW = client.right - client.left;
         int clientH = client.bottom - client.top;
-        if (!TrySize(clientW, clientH, out int width, out int height))
+        if (!TryFrame(clientW, clientH, out int frameX, out int frameY, out int width, out int height))
         {
             return false;
         }
@@ -97,26 +119,9 @@ internal static class BrandLockup
             return false;
         }
 
-        int x = client.left + ((clientW - width) / 2);
-        int y = client.top + ((clientH - height) / 2) - (clientH / 18);
-        if (y < client.top)
-        {
-            y = client.top;
-        }
-
+        int x = client.left + frameX;
+        int y = client.top + frameY;
         if (!Blit(hdc, x, y, width, height, pixels))
-        {
-            return false;
-        }
-
-        bottom = y + height;
-        return true;
-    }
-
-    internal static bool TryBlitAt(HDC hdc, int x, int y, int width, int height, out int bottom)
-    {
-        bottom = y;
-        if (width < 64 || height < 16 || !TryRasterize(width, height, out byte[] pixels) || !Blit(hdc, x, y, width, height, pixels))
         {
             return false;
         }
