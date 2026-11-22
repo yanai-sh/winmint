@@ -9,6 +9,8 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ('winmint-inv-' + [guid]::NewGuid()
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'bin\cli'), (Join-Path $root 'bin\wizard'), (Join-Path $root 'artifacts\provisioning'), (Join-Path $root 'artifacts\winpe-apply'), (Join-Path $root 'servicing'), (Join-Path $root 'tools\apply') | Out-Null
 try {
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\WinMint.Cli.exe') -Value 'cli' -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $root 'bin\cli\WinMint.Cli.dll') -Value 'cli-dll' -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $root 'bin\wizard\WinMint.Wizard.dll') -Value 'wiz-dll' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\WinMint.Contracts.dll') -Value 'contracts' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\cli\coreclr.dll') -Value 'runtime' -Encoding ascii
     Set-Content -LiteralPath (Join-Path $root 'bin\wizard\WinMint.Wizard.exe') -Value 'wiz' -Encoding ascii
@@ -22,6 +24,9 @@ try {
     $byPath = @{}
     foreach ($f in $doc.files) { $byPath[$f.path] = $f }
     if ($byPath['bin/cli/WinMint.Cli.exe'].class -cne 'winmint-pe') { throw 'cli class' }
+    if ($byPath['bin/cli/WinMint.Cli.dll'].class -cne 'winmint-pe') { throw 'cli dll class' }
+    if (-not $byPath['bin/cli/WinMint.Cli.dll'].signingCandidate) { throw 'cli dll should be a signing candidate' }
+    if ($byPath['bin/wizard/WinMint.Wizard.dll'].class -cne 'winmint-pe') { throw 'wizard dll class' }
     if ($byPath['artifacts/winpe-apply/WinMintApply.exe'].class -cne 'winmint-pe') { throw 'winpe helper class' }
     if (-not $byPath['artifacts/winpe-apply/WinMintApply.exe'].signingCandidate) { throw 'winpe helper should be a signing candidate' }
     if (-not $byPath['bin/cli/WinMint.Cli.exe'].signingCandidate) { throw 'cli should be a signing candidate' }
