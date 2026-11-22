@@ -24,7 +24,9 @@ function Get-CandidateJob([string] $Name) {
 $check = Get-CandidateJob 'check'
 $candidate = Get-CandidateJob 'candidate'
 
-Assert-Contains $candidate 'needs: check' 'candidate dependency'
+if ($candidate -match '(?m)^\s+needs:') {
+    throw 'candidate must run beside the gate; it does not consume gate outputs'
+}
 Assert-Contains $candidate 'permissions:' 'candidate permissions block'
 Assert-Contains $candidate 'contents: read' 'candidate read permission'
 Assert-Contains $candidate 'runs-on: windows-11-arm' 'native ARM64 candidate runner'
