@@ -86,7 +86,7 @@ public class ServicingWorkspaceTests
             {
                 Assert.Contains(digest, keys);
             }
-            Assert.Contains("usbMedia.sha256", keys);
+            Assert.DoesNotContain("usbMedia.sha256", keys);
 
             HashSet<string> winget = doc.RootElement.GetProperty("requiredWingetIds")
                 .EnumerateArray()

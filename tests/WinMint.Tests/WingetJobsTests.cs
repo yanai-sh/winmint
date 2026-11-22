@@ -321,9 +321,8 @@ public class WingetJobsTests
     public async Task Shell_nilesoft_winget_import_nudges_explorer_before_install()
     {
         // Same MSI OnInstall hang via WingetImport package list (not a discrete Winget job).
-        string importPath = BundleLoader.DefaultGuestWingetImportPath;
-        Directory.CreateDirectory(Path.GetDirectoryName(importPath)!);
-        string? previous = File.Exists(importPath) ? File.ReadAllText(importPath) : null;
+        string dir = Directory.CreateTempSubdirectory("winmint-winget-import").FullName;
+        string importPath = Path.Combine(dir, "winget-import.json");
         try
         {
             File.WriteAllText(
@@ -359,7 +358,7 @@ public class WingetJobsTests
 
             SessionResult result = await ProvisioningSession.RunShellAsync(
                 Bundle(jobs: [new ProvisionJob("winget.import", ProvisionJobKind.WingetImport)]),
-                Env(guest, evidence),
+                Env(guest, evidence) with { GuestWingetImportPath = importPath },
                 TestContext.Current.CancellationToken);
 
             Assert.Equal(SessionOutcome.Complete, result.Outcome);
@@ -370,17 +369,7 @@ public class WingetJobsTests
         }
         finally
         {
-            if (previous is null)
-            {
-                if (File.Exists(importPath))
-                {
-                    File.Delete(importPath);
-                }
-            }
-            else
-            {
-                File.WriteAllText(importPath, previous);
-            }
+            Directory.Delete(dir, recursive: true);
         }
     }
 

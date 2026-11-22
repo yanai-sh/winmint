@@ -27,7 +27,8 @@ internal sealed record JobRunnerEnv(
     int StartIndex,
     WslMockState WslMock,
     Action<string>? RecordPhaseQuiet = null,
-    TimeSpan PackageJobTimeout = default);
+    TimeSpan PackageJobTimeout = default,
+    string? GuestWingetImportPath = null);
 
 internal enum JobsRunKind
 {
@@ -203,11 +204,12 @@ internal static partial class ProvisioningJobRunner
 
                         if (job.Kind is ProvisionJobKind.WingetImport)
                         {
-                            if (!File.Exists(BundleLoader.DefaultGuestWingetImportPath))
+                            string importPath = env.GuestWingetImportPath ?? BundleLoader.DefaultGuestWingetImportPath;
+                            if (!File.Exists(importPath))
                             {
                                 JobsRunResult? importFail = context.RecordPackageFailure(
                                     "jobs.winget.importMissing",
-                                    $"{job.Id}: winget-import.json missing at {BundleLoader.DefaultGuestWingetImportPath}.");
+                                    $"{job.Id}: winget-import.json missing at {importPath}.");
                                 if (importFail is not null)
                                 {
                                     return importFail.Value;

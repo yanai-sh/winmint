@@ -157,6 +157,10 @@ internal static class ProvisioningSessionTestFakes
 
         public Action TryDismissOobeOverlayCallback { get; init; } = () => { };
 
+        public long BootId { get; set; } = 1;
+
+        public bool BootTickReadable { get; set; } = true;
+
         public bool IsWslPlatformReady() => IsWslPlatformReadyCallback();
 
         public bool IsWslDistroRegistered(string installId) => IsWslDistroRegisteredCallback(installId);
@@ -183,6 +187,9 @@ internal static class ProvisioningSessionTestFakes
         public void SuppressWslOobe() => SuppressWslOobeCallback();
 
         public void TryDismissOobeOverlay() => TryDismissOobeOverlayCallback();
+
+        public BootTick? ReadBootTick() =>
+            BootTickReadable ? new BootTick(BootId) : null;
     }
 
     internal sealed class FakeAssetDownload : IAssetDownload
@@ -429,10 +436,29 @@ internal static class ProvisioningSessionTestFakes
 
         public string? LastTenurePhase { get; private set; }
 
-        public TenureState ReadTenure() =>
-            new(CheckpointInProgress: LastWritten is not null, HeartbeatUtc: DateTimeOffset.UtcNow);
+        public DateTimeOffset? HeartbeatUtc { get; private set; }
 
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+        public long? HeartbeatBootId { get; private set; }
+
+        public string? HeartbeatPhase { get; private set; }
+
+        public int? HeartbeatResumeCount { get; private set; }
+
+        public TenureState ReadTenure() =>
+            new(
+                CheckpointInProgress: LastWritten is not null,
+                HeartbeatUtc: HeartbeatUtc,
+                BootId: HeartbeatBootId,
+                Phase: HeartbeatPhase,
+                ResumeCount: HeartbeatResumeCount);
+
+        public void WriteHeartbeat(DateTimeOffset utcNow, long? bootId, string? phase, int? resumeCount)
+        {
+            HeartbeatUtc = utcNow;
+            HeartbeatBootId = bootId;
+            HeartbeatPhase = phase;
+            HeartbeatResumeCount = resumeCount;
+        }
 
         public void WriteTenurePhase(string code) => LastTenurePhase = code;
 
@@ -525,7 +551,7 @@ internal static class ProvisioningSessionTestFakes
     {
         public TenureState ReadTenure() => new(CheckpointInProgress: false, HeartbeatUtc: null);
 
-        public void WriteHeartbeat(DateTimeOffset utcNow) { }
+        public void WriteHeartbeat(DateTimeOffset utcNow, long? bootId, string? phase, int? resumeCount) { }
 
         public void WriteTenurePhase(string code) { }
 

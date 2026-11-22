@@ -5,18 +5,36 @@ using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.HiDpi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace WinMint.WinPeApply;
 
 /// <summary>
 /// Fullscreen black boot surface for the WinPE apply. The desktop itself is the black
-/// <c>winpe.jpg</c> in the image; this window paints the mark and a progress row on that field.
+/// <c>winpe.jpg</c> in the image; this window paints the dark lockup and a progress row on that field.
 /// </summary>
 internal static class ApplyBootSplash
 {
+    internal const string EscapeVariable = "WINMINT_SPLASH_ESCAPE";
+
+    private static int s_escapeRequested;
+
+    internal static bool EscapeRequested => Volatile.Read(ref s_escapeRequested) != 0;
+
+    internal static void RequestEscape() => Interlocked.Exchange(ref s_escapeRequested, 1);
+
+    internal static void EnablePerMonitorV2()
+    {
+        // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2. A second call fails once a context is set.
+#pragma warning disable CA1416 // WinPE on a current Source ISO is Windows 10 or later.
+        _ = PInvoke.SetProcessDpiAwarenessContext(new DPI_AWARENESS_CONTEXT((nint)(-4)));
+#pragma warning restore CA1416
+    }
+
     internal static IDisposable TryShow()
     {
+        Interlocked.Exchange(ref s_escapeRequested, 0);
         BootSurface surface = new();
         if (!surface.Start())
         {
@@ -42,6 +60,11 @@ internal static class ApplyBootSplash
         private const uint WmClose = 0x0010;
         private const uint WmPaint = 0x000F;
         private const uint WmTick = 0x0400;
+
+        private const int VkEscape = 0x1B;
+
+        private readonly bool _escapeEnabled =
+            string.Equals(Environment.GetEnvironmentVariable(EscapeVariable), "1", StringComparison.Ordinal);
 
         private readonly ManualResetEventSlim _ready = new(false);
         private Thread? _uiThread;
@@ -102,6 +125,7 @@ internal static class ApplyBootSplash
                 }, null, 140, 140);
                 _shown = true;
                 _ready.Set();
+                DismissIfEscape();
 
                 while (PInvoke.GetMessage(out MSG msg, HWND.Null, 0, 0))
                 {
@@ -115,6 +139,7 @@ internal static class ApplyBootSplash
                     {
                         _phase++;
                         Paint(hwnd, beginPaint: false);
+                        DismissIfEscape();
                         continue;
                     }
 
@@ -137,6 +162,25 @@ internal static class ApplyBootSplash
             finally
             {
                 _ready.Set();
+            }
+        }
+
+        private void DismissIfEscape()
+        {
+            if (!_escapeEnabled || EscapeRequested)
+            {
+                return;
+            }
+
+            if ((PInvoke.GetAsyncKeyState(VkEscape) & 0x8000) == 0)
+            {
+                return;
+            }
+
+            RequestEscape();
+            if (_hwnd is { IsInvalid: false } hwnd)
+            {
+                _ = PInvoke.PostMessage(hwnd.Hwnd, WmClose, default, default);
             }
         }
 
@@ -229,8 +273,21 @@ internal static class ApplyBootSplash
 
                 int cx = (rect.left + rect.right) / 2;
                 int cy = (rect.top + rect.bottom) / 2;
-                DrawMark(hdc, cx, cy - 28);
-                DrawProgress(hdc, cx, cy + 78);
+                if (BrandLockup.TryBlit(hdc, rect, out int bottom))
+                {
+                    int progressY = bottom + 36;
+                    if (progressY > rect.bottom - 16)
+                    {
+                        progressY = rect.bottom - 16;
+                    }
+
+                    DrawProgress(hdc, cx, progressY);
+                }
+                else
+                {
+                    BrandMark.Draw(hdc, cx, cy - 28);
+                    DrawProgress(hdc, cx, cy + 78);
+                }
             }
             finally
             {
@@ -243,18 +300,6 @@ internal static class ApplyBootSplash
                     _ = PInvoke.ReleaseDC(hwnd, hdc);
                 }
             }
-        }
-
-        private static void DrawMark(HDC hdc, int cx, int cy)
-        {
-            const int size = 120;
-            int x0 = cx - (size / 2);
-            int y0 = cy - (size / 2);
-            HGDIOBJ oldPen = PInvoke.SelectObject(hdc, PInvoke.GetStockObject(GET_STOCK_OBJECT_FLAGS.NULL_PEN));
-            FillRound(hdc, x0 + 6, y0 + 22, x0 + 58, y0 + 112, 36, new COLORREF(0x00F27011));
-            FillEllipse(hdc, x0 + 40, y0 + 4, x0 + 114, y0 + 62, new COLORREF(0x008CD04C));
-            FillRound(hdc, x0 + 52, y0 + 56, x0 + 112, y0 + 114, 28, new COLORREF(0x00843900));
-            _ = PInvoke.SelectObject(hdc, oldPen);
         }
 
         private void DrawProgress(HDC hdc, int cx, int cy)
@@ -270,15 +315,6 @@ internal static class ApplyBootSplash
                 int x = origin + (i * gap);
                 FillEllipse(hdc, x - radius, cy - radius, x + radius, cy + radius, color);
             }
-        }
-
-        private static void FillRound(HDC hdc, int left, int top, int right, int bottom, int radius, COLORREF color)
-        {
-            HBRUSH brush = PInvoke.CreateSolidBrush(color);
-            HGDIOBJ old = PInvoke.SelectObject(hdc, brush);
-            _ = PInvoke.RoundRect(hdc, left, top, right, bottom, radius, radius);
-            _ = PInvoke.SelectObject(hdc, old);
-            _ = PInvoke.DeleteObject(brush);
         }
 
         private static void FillEllipse(HDC hdc, int left, int top, int right, int bottom, COLORREF color)

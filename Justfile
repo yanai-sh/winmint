@@ -118,9 +118,10 @@ analyze-servicing: analyze-powershell
 # Wipe outs first: AOT can leave a stale Supervisor.exe that omits new string/code paths (e.g. network.wait).
 # (dotnet publish on this SDK rejects --no-incremental.)
 publish-provisioning:
-    Remove-Item -Recurse -Force artifacts/winpe-apply, artifacts/provisioning -ErrorAction SilentlyContinue
+    foreach ($dir in 'artifacts/winpe-apply', 'artifacts/provisioning') { if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force } }
     dotnet publish src/WinMint.WinPeApply/WinMint.WinPeApply.csproj -c Release -o artifacts/winpe-apply
     dotnet publish src/WinMint.Provisioning/WinMint.Provisioning.csproj -c Release -o artifacts/provisioning
+    . '{{justfile_directory()}}/tools/host/Write-WinMintSourceStamp.ps1'; Write-WinMintSourceStamp -Exe (Join-Path '{{justfile_directory()}}' 'artifacts/winpe-apply/WinMintApply.exe') -SourceRoots @((Join-Path '{{justfile_directory()}}' 'src/WinMint.WinPeApply')); Write-WinMintSourceStamp -Exe (Join-Path '{{justfile_directory()}}' 'artifacts/provisioning/WinMint.Provisioning.exe') -SourceRoots @((Join-Path '{{justfile_directory()}}' 'src/WinMint.Provisioning'), (Join-Path '{{justfile_directory()}}' 'src/WinMint.Contracts'))
 
 # Spectre host Watch for smoke/apply (Smoke publishes this before spawning Watch-Host).
 publish-watch:

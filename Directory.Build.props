@@ -27,6 +27,10 @@
     <!-- CS1591 off (not a shipped public API). GenerateDocumentationFile stays on for IDE0005. Document BuildPlan / ImageServicing.Apply / ProvisioningSession entrypoints in source. -->
   </PropertyGroup>
   <ItemGroup>
+    <!-- Installed SDK 11.0.100-rc.2.26504.105 is the only one on this host. Its ILCompiler package trips NU1903 for GHSA-p3jp-9v83-76w9 (CVE-2026-111497, Brotli). -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-p3jp-9v83-76w9" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- STACK: DllImport + GetResult/Wait/.Result. SDK has no banned-API list. -->
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
       <PrivateAssets>all</PrivateAssets>

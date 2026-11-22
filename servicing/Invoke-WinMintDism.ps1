@@ -19,7 +19,9 @@ function Invoke-WinMintDism {
 
         [switch] $PassThruText,
 
-        [string] $DismPath = 'dism.exe'
+        [string] $DismPath = 'dism.exe',
+
+        [int] $HeartbeatSeconds = 15
     )
 
     $work = $env:WINMINT_SERVICING_WORK
@@ -35,12 +37,25 @@ function Invoke-WinMintDism {
 
     $stdoutFile = [IO.Path]::GetTempFileName()
     $stderrFile = [IO.Path]::GetTempFileName()
+    $utf8 = New-Object System.Text.UTF8Encoding $false
     try {
         # Do not use Start-Process -Wait: after Mount-Image, dism.exe can exit while -Wait
         # never returns (smoke hung ~1h with MountStatus Ok / no Mount-Image transcript).
         $proc = Start-Process -FilePath $DismPath -ArgumentList $ArgumentList -PassThru -NoNewWindow `
             -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
-        $null = $proc.WaitForExit()
+        # WaitForExit() with no timeout can sit forever after dism.exe has already exited
+        # (smoke hung ~1h on Mount-Image). Poll HasExited and say so on the console.
+        $beat = if ($HeartbeatSeconds -lt 1) { 15 } else { $HeartbeatSeconds }
+        $phase = [Diagnostics.Stopwatch]::StartNew()
+        $stageName = if ([string]::IsNullOrWhiteSpace($Stage)) { 'DISM' } else { $Stage }
+        while (-not $proc.HasExited) {
+            if ($proc.WaitForExit($beat * 1000)) { break }
+            if ($proc.HasExited) { break }
+            $elapsed = [int]$phase.Elapsed.TotalSeconds
+            $pulse = "$stageName running ${elapsed}s"
+            Write-Host $pulse
+            [IO.File]::AppendAllText($transcriptPath, $pulse + "`n", $utf8)
+        }
         $exitCode = $proc.ExitCode
     }
     finally {
@@ -60,7 +75,6 @@ function Invoke-WinMintDism {
     }
     $capture = $combined.ToString()
 
-    $utf8 = New-Object System.Text.UTF8Encoding $false
     $chunk = $banner + "`n" + $capture
     if ($capture.Length -gt 0 -and -not $capture.EndsWith("`n")) { $chunk += "`n" }
     [IO.File]::AppendAllText($transcriptPath, $chunk, $utf8)

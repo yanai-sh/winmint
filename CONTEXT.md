@@ -30,7 +30,7 @@ _Avoid_: BuildConfig (user-facing); preset names in JSON
 **Orchestrator** — Validates Profile, plans, drives elevated Servicing. Front ends: Cli + Avalonia Wizard, both thin over **HostCompile**.  
 _Avoid_: second planning brain in Cli/Wizard
 
-**HostCompile** — Orchestrator entry: Profile + compose options → immutable `HostComposition` approval → ImageServicing → `ImageEvidence`; document-only commands use `HostPlan`. Cli/Wizard are thin adapters. `tools/host/Invoke-WinMintCli.ps1` skips a stale `bin\cli` when Cli/Orchestrator/Contracts `.cs` is newer (same mtime rule as Supervisor freshness).  
+**HostCompile** — Orchestrator entry: Profile + compose options → immutable `HostComposition` approval → ImageServicing → `ImageEvidence`; document-only commands use `HostPlan`. Cli/Wizard are thin adapters. `tools/host/Invoke-WinMintCli.ps1` skips a stale `bin\cli` when Cli/Orchestrator/Contracts `.cs` is newer by mtime. Guest Supervisor and WinPeApply freshness is the source stamp `just publish-provisioning` writes beside the published exe.  
 _Avoid_: second Plan/Apply brain in Cli or Wizard; conflating with Flash; launching leftover `bin\cli` after source edits
 
 **BuildPlan** — Profile + run options → plan artifacts.  

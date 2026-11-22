@@ -22,7 +22,7 @@ public class WizardShippingPathTests
     [Fact]
     public void Source_stage_has_no_lane_selection_surface()
     {
-        Assert.Null(typeof(ISourceStageViewModel).GetProperty("Lane"));
-        Assert.Null(typeof(ISourceStageViewModel).GetProperty("SelectLaneCommand"));
+        Assert.Null(typeof(SourceStageViewModel).GetProperty("Lane"));
+        Assert.Null(typeof(SourceStageViewModel).GetProperty("SelectLaneCommand"));
     }
 }

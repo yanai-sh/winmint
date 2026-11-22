@@ -11,16 +11,16 @@ public class QualityUpdatePlanTests
     [Theory]
     [InlineData(ImageQualityLane.Test)]
     [InlineData(ImageQualityLane.Release)]
-    public void Plan_does_not_emit_AddQualityUpdates(ImageQualityLane lane)
+    public void Plan_emits_AddQualityUpdates_before_patch_boot(ImageQualityLane lane)
     {
         Result<BuildArtifacts, Failure> planned = BuildPlan.Plan(Parse(), new RunOptions { ImageQuality = lane });
         Assert.True(planned.IsOk, planned.IsOk ? null : $"{planned.Error.Code}: {planned.Error.Message}");
         IReadOnlyList<ServicingOpcode> stages = planned.Value.Stages;
-        Assert.DoesNotContain(ServicingOpcode.AddQualityUpdates, stages);
         int shell = stages.ToList().IndexOf(ServicingOpcode.StampOfflineShell);
+        int quality = stages.ToList().IndexOf(ServicingOpcode.AddQualityUpdates);
         int boot = stages.ToList().IndexOf(ServicingOpcode.PatchBootWimApply);
         int export = stages.ToList().IndexOf(ServicingOpcode.ExportWim);
-        Assert.True(shell >= 0 && boot == shell + 1 && export == boot + 1);
+        Assert.True(shell >= 0 && quality == shell + 1 && boot == quality + 1 && export == boot + 1);
     }
 
     [Fact]

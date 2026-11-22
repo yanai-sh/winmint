@@ -55,9 +55,9 @@ public class BrowserPolicyPlanTests
                 ServicingOpcode.StampOfflineDefaultUser,
                 ServicingOpcode.StageOobeUnattend,
                 ServicingOpcode.StampOfflineShell,
+                ServicingOpcode.AddQualityUpdates,
                 ServicingOpcode.PatchBootWimApply,
                 ServicingOpcode.ExportWim,
-                ServicingOpcode.PublishUsbMedia,
                 ServicingOpcode.BuildIso,
             ],
             result.Value.Stages);

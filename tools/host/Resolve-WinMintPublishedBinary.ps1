@@ -1,5 +1,5 @@
 #requires -Version 7.6
-# Mtime freshness aligned with ImageServicing.FindSourceNewerThan. Dot-source; do not run.
+# Mtime only: chooses bin\cli versus dotnet run. Guest publish freshness is the *.sha256 stamp. Dot-source; do not run.
 
 function Test-WinMintPublishedBinaryCurrent {
     param(

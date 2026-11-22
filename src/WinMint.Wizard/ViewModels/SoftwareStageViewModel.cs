@@ -7,16 +7,6 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
 
-public interface ISoftwareStageViewModel
-{
-    CuratedChipSelection Chips { get; }
-    DesktopSelectionViewModel Desktop { get; }
-    StationOutcomeSelectionViewModel Outcomes { get; }
-    AdvancedPackageTextViewModel Advanced { get; }
-    IAsyncRelayCommand UseDefaultsCommand { get; }
-    StageStatusViewModel Status { get; }
-}
-
 public sealed partial class DesktopSelectionViewModel : ObservableObject
 {
     private readonly Action _changed;
@@ -130,7 +120,7 @@ public sealed partial class AdvancedPackageTextViewModel : ObservableObject
     partial void OnWslChanged(string value) => _changed();
 }
 
-internal sealed partial class SoftwareStageViewModel : ObservableObject, ISoftwareStageViewModel
+public sealed partial class SoftwareStageViewModel : ObservableObject
 {
     private readonly Func<Task> _useDefaults;
 

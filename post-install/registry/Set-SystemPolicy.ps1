@@ -18,72 +18,23 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-
-function Set-RegValue {
-    param(
-        [Parameter(Mandatory)][string] $Path,
-        [Parameter(Mandatory)][string] $Name,
-        [Parameter(Mandatory)][string] $Type,
-        [Parameter(Mandatory)][string] $Data
-    )
-    if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Data"
-        return
-    }
-
-    if ($Path -notmatch '^(HKLM|HKCU):\\(.+)$') {
-        throw "Unsupported registry path: $Path"
-    }
-
-    $regPath = $Matches[1] + '\' + $Matches[2]
-    $reg = Join-Path $env:SystemRoot 'System32\reg.exe'
-    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
-    $ErrorActionPreference = 'Continue'
-    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1 | ForEach-Object { "$_" }
-    if ($LASTEXITCODE -eq 0) {
-        return
-    }
-
-    $text = (@($output) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join ' '
-    if ($text -match 'Access is denied') {
-        Write-Output "left unchanged: $regPath $Name"
-        return
-    }
-
-    throw "Could not set $regPath $Name ($LASTEXITCODE). $text"
-}
-
-function Set-RegDword {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_DWORD' -Data "$Value"
-}
-
-function Set-RegString {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_SZ' -Data $Value
-}
-
-function Set-RegExpand {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_EXPAND_SZ' -Data $Value
-}
-
+$regExe = Join-Path $PSScriptRoot 'Set-RegExeValue.ps1'
 
 $system = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
-Set-RegDword $system 'EnableActivityFeed' 0
-Set-RegDword $system 'PublishUserActivities' 0
-Set-RegDword $system 'UploadUserActivities' 0
-Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 0
-Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' 'PreventDeviceMetadataFromNetwork' 1
-Set-RegDword 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' 'DisableWpbtExecution' 1
-Set-RegDword 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' 'AutoDownload' 2
-Set-RegDword 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
-Set-RegDword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
-Set-RegDword 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' 'Enabled' 3
-Set-RegExpand 'HKCU:\Environment' 'XDG_CONFIG_HOME' '%USERPROFILE%\.config'
-Set-RegExpand 'HKCU:\Environment' 'XDG_DATA_HOME' '%USERPROFILE%\.local\share'
-Set-RegExpand 'HKCU:\Environment' 'XDG_STATE_HOME' '%USERPROFILE%\.local\state'
-Set-RegExpand 'HKCU:\Environment' 'XDG_CACHE_HOME' '%USERPROFILE%\.cache'
+& $regExe -Path $system -Name 'EnableActivityFeed' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path $system -Name 'PublishUserActivities' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path $system -Name 'UploadUserActivities' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' -Name 'DODownloadMode' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Name 'PreventDeviceMetadataFromNetwork' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'DisableWpbtExecution' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore' -Name 'AutoDownload' -Type 'REG_DWORD' -Data '2' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -Name 'AllowDevelopmentWithoutDevLicense' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo' -Name 'Enabled' -Type 'REG_DWORD' -Data '3' -DryRun:$DryRun
+& $regExe -Path 'HKCU:\Environment' -Name 'XDG_CONFIG_HOME' -Type 'REG_EXPAND_SZ' -Data '%USERPROFILE%\.config' -DryRun:$DryRun
+& $regExe -Path 'HKCU:\Environment' -Name 'XDG_DATA_HOME' -Type 'REG_EXPAND_SZ' -Data '%USERPROFILE%\.local\share' -DryRun:$DryRun
+& $regExe -Path 'HKCU:\Environment' -Name 'XDG_STATE_HOME' -Type 'REG_EXPAND_SZ' -Data '%USERPROFILE%\.local\state' -DryRun:$DryRun
+& $regExe -Path 'HKCU:\Environment' -Name 'XDG_CACHE_HOME' -Type 'REG_EXPAND_SZ' -Data '%USERPROFILE%\.cache' -DryRun:$DryRun
 
 if ($DryRun) {
     Write-Output 'dry-run: system policy not written.'

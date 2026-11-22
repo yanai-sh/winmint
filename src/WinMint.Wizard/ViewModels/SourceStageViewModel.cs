@@ -9,17 +9,6 @@ using WinMint.Orchestrator;
 
 namespace WinMint.Wizard.ViewModels;
 
-public interface ISourceStageViewModel
-{
-    string SourceIsoPath { get; set; }
-    ObservableCollection<WimIndexInfo> WimIndexes { get; }
-    WimIndexInfo? SelectedWimIndex { get; set; }
-    bool IsWimPickerVisible { get; }
-    bool IsWimProbeBusy { get; }
-    IAsyncRelayCommand BrowseIsoCommand { get; }
-    StageStatusViewModel Status { get; }
-}
-
 internal interface ISourceStageHost
 {
     void SourceDraftChanged();
@@ -28,7 +17,7 @@ internal interface ISourceStageHost
     void ClearSourceProbeError();
 }
 
-internal sealed partial class SourceStageViewModel : ObservableObject, ISourceStageViewModel, IDisposable
+public sealed partial class SourceStageViewModel : ObservableObject, IDisposable
 {
     private readonly IStorageProvider? _storage;
     private readonly ISourceStageHost _host;
@@ -38,7 +27,7 @@ internal sealed partial class SourceStageViewModel : ObservableObject, ISourceSt
     private bool _userChoseWimIndex;
     private bool _updatingWimPicker;
 
-    public SourceStageViewModel(IStorageProvider? storage, ISourceStageHost host)
+    internal SourceStageViewModel(IStorageProvider? storage, ISourceStageHost host)
     {
         _storage = storage;
         _host = host;

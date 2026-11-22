@@ -16,82 +16,33 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-
-function Set-RegValue {
-    param(
-        [Parameter(Mandatory)][string] $Path,
-        [Parameter(Mandatory)][string] $Name,
-        [Parameter(Mandatory)][string] $Type,
-        [Parameter(Mandatory)][string] $Data
-    )
-    if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Data"
-        return
-    }
-
-    if ($Path -notmatch '^(HKLM|HKCU):\\(.+)$') {
-        throw "Unsupported registry path: $Path"
-    }
-
-    $regPath = $Matches[1] + '\' + $Matches[2]
-    $reg = Join-Path $env:SystemRoot 'System32\reg.exe'
-    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
-    $ErrorActionPreference = 'Continue'
-    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1 | ForEach-Object { "$_" }
-    if ($LASTEXITCODE -eq 0) {
-        return
-    }
-
-    $text = (@($output) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join ' '
-    if ($text -match 'Access is denied') {
-        Write-Output "left unchanged: $regPath $Name"
-        return
-    }
-
-    throw "Could not set $regPath $Name ($LASTEXITCODE). $text"
-}
-
-function Set-RegDword {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_DWORD' -Data "$Value"
-}
-
-function Set-RegString {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_SZ' -Data $Value
-}
-
-function Set-RegExpand {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_EXPAND_SZ' -Data $Value
-}
-
+$regExe = Join-Path $PSScriptRoot 'Set-RegExeValue.ps1'
 
 $cv = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion'
-Set-RegDword "$cv\Themes\Personalize" 'AppsUseLightTheme' 0
-Set-RegDword "$cv\Themes\Personalize" 'SystemUsesLightTheme' 0
-Set-RegDword "$cv\Notifications\Settings" 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
+& $regExe -Path "$cv\Themes\Personalize" -Name 'AppsUseLightTheme' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path "$cv\Themes\Personalize" -Name 'SystemUsesLightTheme' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path "$cv\Notifications\Settings" -Name 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
 
 foreach ($pair in @(
-        @{ Name = 'HideFileExt'; Value = 0 }
-        @{ Name = 'Hidden'; Value = 1 }
-        @{ Name = 'FullPathAddress'; Value = 1 }
-        @{ Name = 'LaunchTo'; Value = 1 }
-        @{ Name = 'ShowFrequent'; Value = 0 }
-        @{ Name = 'NavPaneShowVersionControl'; Value = 1 }
-        @{ Name = 'ShowSyncProviderNotifications'; Value = 0 }
+        @{ Name = 'HideFileExt'; Value = '0' }
+        @{ Name = 'Hidden'; Value = '1' }
+        @{ Name = 'FullPathAddress'; Value = '1' }
+        @{ Name = 'LaunchTo'; Value = '1' }
+        @{ Name = 'ShowFrequent'; Value = '0' }
+        @{ Name = 'NavPaneShowVersionControl'; Value = '1' }
+        @{ Name = 'ShowSyncProviderNotifications'; Value = '0' }
     )) {
-    Set-RegDword "$cv\Explorer\Advanced" $pair.Name $pair.Value
+    & $regExe -Path "$cv\Explorer\Advanced" -Name $pair.Name -Type 'REG_DWORD' -Data $pair.Value -DryRun:$DryRun
 }
 
-Set-RegDword "$cv\Explorer" 'ShowRecent' 0
-Set-RegDword "$cv\Explorer" 'ShowCloudFilesInQuickAccess' 0
-Set-RegDword "$cv\DesktopSpotlight\Settings" 'EnabledState' 0
-Set-RegDword "$cv\Explorer\Wallpapers" 'BackgroundType' 0
+& $regExe -Path "$cv\Explorer" -Name 'ShowRecent' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path "$cv\Explorer" -Name 'ShowCloudFilesInQuickAccess' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path "$cv\DesktopSpotlight\Settings" -Name 'EnabledState' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
+& $regExe -Path "$cv\Explorer\Wallpapers" -Name 'BackgroundType' -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
 
 $hide = '{645FF040-5081-101B-9F08-00AA002F954E}'
-Set-RegDword "$cv\Explorer\HideDesktopIcons\NewStartPanel" $hide 1
-Set-RegDword "$cv\Explorer\HideDesktopIcons\ClassicStartMenu" $hide 1
+& $regExe -Path "$cv\Explorer\HideDesktopIcons\NewStartPanel" -Name $hide -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path "$cv\Explorer\HideDesktopIcons\ClassicStartMenu" -Name $hide -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
 
 if ($DryRun) {
     Write-Output 'dry-run: Explorer view not written.'

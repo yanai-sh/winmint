@@ -16,60 +16,11 @@ if (Test-Path -LiteralPath 'variable:PSNativeCommandUseErrorActionPreference') {
     $PSNativeCommandUseErrorActionPreference = $false
 }
 
-
-function Set-RegValue {
-    param(
-        [Parameter(Mandatory)][string] $Path,
-        [Parameter(Mandatory)][string] $Name,
-        [Parameter(Mandatory)][string] $Type,
-        [Parameter(Mandatory)][string] $Data
-    )
-    if ($DryRun) {
-        Write-Output "dry-run: $Path $Name = $Data"
-        return
-    }
-
-    if ($Path -notmatch '^(HKLM|HKCU):\\(.+)$') {
-        throw "Unsupported registry path: $Path"
-    }
-
-    $regPath = $Matches[1] + '\' + $Matches[2]
-    $reg = Join-Path $env:SystemRoot 'System32\reg.exe'
-    # Redirected native stderr ends the script on Windows PowerShell 5.1 while Stop is in effect.
-    $ErrorActionPreference = 'Continue'
-    $output = & $reg add $regPath /v $Name /t $Type /d $Data /f 2>&1 | ForEach-Object { "$_" }
-    if ($LASTEXITCODE -eq 0) {
-        return
-    }
-
-    $text = (@($output) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join ' '
-    if ($text -match 'Access is denied') {
-        Write-Output "left unchanged: $regPath $Name"
-        return
-    }
-
-    throw "Could not set $regPath $Name ($LASTEXITCODE). $text"
-}
-
-function Set-RegDword {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][int] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_DWORD' -Data "$Value"
-}
-
-function Set-RegString {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_SZ' -Data $Value
-}
-
-function Set-RegExpand {
-    param([Parameter(Mandatory)][string] $Path, [Parameter(Mandatory)][string] $Name, [Parameter(Mandatory)][string] $Value)
-    Set-RegValue -Path $Path -Name $Name -Type 'REG_EXPAND_SZ' -Data $Value
-}
-
+$regExe = Join-Path $PSScriptRoot 'Set-RegExeValue.ps1'
 
 $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'
-Set-RegDword $pol 'DisableWindowsConsumerFeatures' 1
-Set-RegDword $pol 'DisableSoftLanding' 1
+& $regExe -Path $pol -Name 'DisableWindowsConsumerFeatures' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
+& $regExe -Path $pol -Name 'DisableSoftLanding' -Type 'REG_DWORD' -Data '1' -DryRun:$DryRun
 
 $cv = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
 foreach ($name in @(
@@ -88,7 +39,7 @@ foreach ($name in @(
         'RotatingLockScreenEnabled'
         'RotatingLockScreenOverlayEnabled'
     )) {
-    Set-RegDword $cv $name 0
+    & $regExe -Path $cv -Name $name -Type 'REG_DWORD' -Data '0' -DryRun:$DryRun
 }
 
 if ($DryRun) {

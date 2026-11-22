@@ -53,10 +53,10 @@ public sealed partial class WizardViewModel :
         RefreshNavigation();
     }
 
-    public ISourceStageViewModel Source => _source;
-    public IAccountStageViewModel Account => _account;
-    public ISoftwareStageViewModel Software => _software;
-    [ObservableProperty] private IReviewStageViewModel? _review;
+    public SourceStageViewModel Source => _source;
+    public AccountStageViewModel Account => _account;
+    public SoftwareStageViewModel Software => _software;
+    [ObservableProperty] private ReviewStageViewModel? _review;
 
     [ObservableProperty] private int _stepIndex;
     [ObservableProperty] private string _stageLabel = "Source";

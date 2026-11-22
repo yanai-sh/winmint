@@ -30,6 +30,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $repoRoot
 . (Join-Path $repoRoot 'tools/host/WinMintHostConsole.ps1')
+. (Join-Path $repoRoot 'servicing\Enable-WinMintStayAwake.ps1')
 
 function Invoke-WinMintSmokeElevatedWorker {
     param(
@@ -63,6 +64,7 @@ Or: just smoke-maintainer-monitor
     New-Item -ItemType Directory -Force -Path (Split-Path $log -Parent) | Out-Null
     Start-Transcript -LiteralPath $log -Force | Out-Null
     try {
+        Enable-WinMintStayAwake
         Write-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         Write-Host "Start-SmokeElevated Admin=True HEAD=$(git rev-parse --short HEAD)"
         $recipe = Join-Path $repoRoot 'tools\vm\Invoke-SmokeRecipe.ps1'
@@ -80,6 +82,7 @@ Or: just smoke-maintainer-monitor
         exit $LASTEXITCODE
     }
     finally {
+        Disable-WinMintStayAwake
         Clear-WinMintHostConsoleWorkerPid -WorkRoot $workRoot
         Stop-Transcript | Out-Null
     }

@@ -47,7 +47,6 @@ public sealed record SessionPolicy(
     TimeSpan SettleDeadline,
     TimeSpan SettlePollInterval,
     TimeSpan FailedDwell,
-    TimeSpan StaleTenureThreshold,
     // Outbound wait when RequiresNetwork (Hyper-V Offline OOBE may attach NAT after first paint).
     TimeSpan NetworkWaitDeadline = default,
     // Per winget/scoop package spawn — kills hung installer trees via Process.RunAsync cancel.
@@ -60,7 +59,6 @@ public sealed record SessionPolicy(
         SettleDeadline: TimeSpan.FromSeconds(120),
         SettlePollInterval: TimeSpan.FromSeconds(2),
         FailedDwell: TimeSpan.FromSeconds(5),
-        StaleTenureThreshold: TimeSpan.FromMinutes(15),
         NetworkWaitDeadline: TimeSpan.FromSeconds(120),
         // Safety net: Nilesoft.Shell winget→WiX MSI OnInstall waits on `shell.exe -restart`.
         // Job runner nudges explorer.exe first; this caps any remaining hang so tenure continues.
@@ -138,6 +136,9 @@ public interface IGuestMachine
 
     /// <summary>Best-effort: tear down stuck CloudExperienceHost OOBE overlay after Shell unlock.</summary>
     void TryDismissOobeOverlay();
+
+    /// <summary>Boot generation. Null when the guest cannot read it.</summary>
+    BootTick? ReadBootTick();
 }
 
 /// <summary>
@@ -148,7 +149,8 @@ public sealed record ShellEnvironment(
     TimeProvider Time,
     IGuestMachine Guest,
     ISplashPresenter Splash,
-    IEvidenceSink Evidence);
+    IEvidenceSink Evidence,
+    string? GuestWingetImportPath = null);
 
 /// <summary>OS reboot after NeedsReboot checkpoint (ticket 16). Nullable in tests; production wires Win32.</summary>
 public interface ISystemReboot
@@ -327,17 +329,26 @@ public interface ISplashPresenter
     void SetStatus(SessionStatus status);
 }
 
-/// <summary>
-/// Durable tenure under %ProgramData%\WinMint\.
-/// Heartbeat + checkpoint write/clear for reboot resume.
-/// </summary>
-public sealed record TenureState(bool CheckpointInProgress, DateTimeOffset? HeartbeatUtc);
+/// <summary>Boot generation from the prefetch BootId. Not a clock.</summary>
+public readonly record struct BootTick(long BootId);
+
+public sealed record TenureState(
+    bool CheckpointInProgress,
+    DateTimeOffset? HeartbeatUtc,
+    long? BootId = null,
+    string? Phase = null,
+    int? ResumeCount = null);
 
 public interface ICheckpointStore
 {
     TenureState ReadTenure();
 
-    void WriteHeartbeat(DateTimeOffset utcNow);
+    /// <summary>
+    /// Line 1 is UTC for diagnosis. Then boot id, checkpoint phase, and how many times
+    /// this boot has started that phase. A missing boot id, phase, or count is stale.
+    /// The stale check does not read the UTC line.
+    /// </summary>
+    void WriteHeartbeat(DateTimeOffset utcNow, long? bootId, string? phase, int? resumeCount);
 
     /// <summary>Last splash/session phase code under ProgramData (survives mid-settle death).</summary>
     void WriteTenurePhase(string code);
