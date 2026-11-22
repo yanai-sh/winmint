@@ -247,6 +247,10 @@ function Assert-Contract {
         if (Test-Path -LiteralPath $jpgSrc -PathType Leaf) {
             Copy-Item -LiteralPath $jpgSrc -Destination (Join-Path $system32 'winpe.jpg') -Force
         }
+        $wpeSrc = Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'wpeinit.xml'
+        if (Test-Path -LiteralPath $wpeSrc -PathType Leaf) {
+            Copy-Item -LiteralPath $wpeSrc -Destination (Join-Path $system32 'wpeinit.xml') -Force
+        }
     }
     if (-not $NoWorkHelper) {
         $payloadDir = Join-Path $contractWork 'payload'

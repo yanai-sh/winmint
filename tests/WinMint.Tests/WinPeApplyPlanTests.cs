@@ -138,6 +138,15 @@ public class WinPeApplyPlanTests
         int diskpartAt = payload.IndexOf("diskpart /s", StringComparison.Ordinal);
         Assert.True(seeAt >= 0 && installAt > seeAt && findAt > installAt && diskpartAt > installAt,
             "A stick without the install file must shut down before diskpart and before boot-disk resolution.");
+        int earlyAt = payload.IndexOf("if not exist \"%SEEN%:\\winmint-install.txt\"", StringComparison.Ordinal);
+        int initAt = payload.IndexOf("call :winmint_init_pe", StringComparison.Ordinal);
+        int longAt = payload.IndexOf(
+            "for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload",
+            StringComparison.Ordinal);
+        Assert.True(earlyAt >= 0 && initAt > earlyAt && longAt > initAt && installAt > longAt,
+            "A missing install file must shut down before wpeinit, and wpeinit before the long payload search.");
+        Assert.Contains("wpeinit -unattend:\"%~dp0wpeinit.xml\"", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("call wpeinit", payload, StringComparison.Ordinal);
         Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);
         Assert.Contains("de94bba4-06d1-4d40-a16a-bfd50179d6ac", payload, StringComparison.OrdinalIgnoreCase);

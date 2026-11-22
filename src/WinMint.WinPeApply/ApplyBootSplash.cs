@@ -176,6 +176,11 @@ internal static class ApplyBootSplash
                 HWND hwnd = _hwnd!.Hwnd;
                 _ = PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOW);
                 _ = PInvoke.UpdateWindow(hwnd);
+                // Cover the panel before Direct3D. A missing d3d11, or a hang inside it, used to
+                // leave the stock blue WinPE desktop up while LaunchApply had not started.
+                Cover(hwnd);
+                _shown = true;
+                _ready.Set();
                 if (_picker)
                 {
                     _ = PInvoke.SetForegroundWindow(hwnd);
@@ -200,8 +205,6 @@ internal static class ApplyBootSplash
                         _ = PInvoke.PostMessage(open.Hwnd, WmTick, default, default);
                     }
                 }, null, tickMs, tickMs);
-                _shown = true;
-                _ready.Set();
                 DismissIfEscape();
 
                 while (PInvoke.GetMessage(out MSG msg, HWND.Null, 0, 0))
@@ -357,18 +360,11 @@ internal static class ApplyBootSplash
 
         private void EnsureWindow()
         {
-            int x = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_XVIRTUALSCREEN);
-            int y = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_YVIRTUALSCREEN);
-            int width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXVIRTUALSCREEN);
-            int height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYVIRTUALSCREEN);
-            if (width <= 0 || height <= 0)
-            {
-                x = 0;
-                y = 0;
-                width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
-                height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
-            }
-
+            // Primary panel at 0,0. Virtual-screen origin on this Surface puts the window off the glass.
+            int x = 0;
+            int y = 0;
+            int width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
+            int height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
             if (width <= 0)
             {
                 width = 800;
@@ -386,7 +382,7 @@ internal static class ApplyBootSplash
                 unsafe
                 {
                     created = PInvoke.CreateWindowEx(
-                        WINDOW_EX_STYLE.WS_EX_TOPMOST | WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
+                        WINDOW_EX_STYLE.WS_EX_TOPMOST,
                         "STATIC",
                         "WinMint",
                         WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_VISIBLE,
@@ -414,6 +410,44 @@ internal static class ApplyBootSplash
             }
         }
 
+        private static void Cover(HWND hwnd)
+        {
+            HDC hdc = PInvoke.GetDC(hwnd);
+            if (hdc.IsNull)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!PInvoke.GetClientRect(hwnd, out RECT rect))
+                {
+                    return;
+                }
+
+                Fill(hdc, rect);
+            }
+            finally
+            {
+                _ = PInvoke.ReleaseDC(hwnd, hdc);
+            }
+        }
+
+        private static void Fill(HDC hdc, RECT rect)
+        {
+            HBRUSH black = PInvoke.CreateSolidBrush(new COLORREF(0));
+            HGDIOBJ previous = PInvoke.SelectObject(hdc, black);
+            _ = PInvoke.PatBlt(
+                hdc,
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                ROP_CODE.PATCOPY);
+            _ = PInvoke.SelectObject(hdc, previous);
+            _ = PInvoke.DeleteObject(black);
+        }
+
         private void Paint(HWND hwnd, bool beginPaint)
         {
             PAINTSTRUCT paint = default;
@@ -430,17 +464,7 @@ internal static class ApplyBootSplash
                     return;
                 }
 
-                HBRUSH black = PInvoke.CreateSolidBrush(new COLORREF(0));
-                HGDIOBJ previous = PInvoke.SelectObject(hdc, black);
-                _ = PInvoke.PatBlt(
-                    hdc,
-                    rect.left,
-                    rect.top,
-                    rect.right - rect.left,
-                    rect.bottom - rect.top,
-                    ROP_CODE.PATCOPY);
-                _ = PInvoke.SelectObject(hdc, previous);
-                _ = PInvoke.DeleteObject(black);
+                Fill(hdc, rect);
 
                 if (_picker && _painter is not null)
                 {

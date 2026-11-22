@@ -362,6 +362,8 @@ foreach ($index in $indexes) {
         }
         Copy-Item -LiteralPath $launchApplyPayload `
             -Destination (Join-Path $bootMount 'Windows\System32\LaunchApply.cmd') -Force
+        Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $launchApplyPayload) 'wpeinit.xml') `
+            -Destination (Join-Path $bootMount 'Windows\System32\wpeinit.xml') -Force
         Copy-Item -LiteralPath $helperSrc `
             -Destination (Join-Path $bootMount 'Windows\System32\WinMintApply.exe') -Force
         Set-Content -LiteralPath (Join-Path $bootMount 'Windows\System32\winpeshl.ini') -Value $winpeshl -Encoding ascii

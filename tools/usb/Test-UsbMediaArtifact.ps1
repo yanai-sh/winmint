@@ -46,7 +46,8 @@ $applyPaths = @(
     'Windows/System32/LaunchApply.cmd',
     'Windows/System32/winpeshl.ini',
     'Windows/System32/WinMintApply.exe',
-    'Windows/System32/winpe.jpg'
+    'Windows/System32/winpe.jpg',
+    'Windows/System32/wpeinit.xml'
 )
 $extractRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-static-boot-' + [guid]::NewGuid().ToString('N'))
 try {

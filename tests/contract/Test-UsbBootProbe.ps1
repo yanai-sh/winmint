@@ -160,6 +160,18 @@ foreach ($source in @($static, $image)) {
     }
 }
 
+$early = $launch.IndexOf('if not exist "%SEEN%:\winmint-install.txt"')
+$init = $launch.IndexOf('call :winmint_init_pe')
+$long = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
+if ($early -lt 0 -or $init -le $early -or $long -le $init) {
+    throw 'a missing install file must shut down before wpeinit, and wpeinit before the long payload search'
+}
+if ($launch -match '(?m)^call wpeinit\s*$') { throw 'LaunchApply must not call bare wpeinit' }
+$wpeXml = Join-Path $repo 'payload/winpe/wpeinit.xml'
+if ((Get-Content -LiteralPath $wpeXml -Raw -Encoding utf8) -notmatch '<EnableNetwork>\s*false\s*</EnableNetwork>') {
+    throw 'wpeinit.xml must set EnableNetwork false'
+}
+
 $launchLines = @($launch -split '\r?\n')
 $gateStart = [array]::IndexOf($launchLines, 'for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
 $gateStop = [array]::IndexOf($launchLines, 'set WORK=%TEMP%\winmint')
