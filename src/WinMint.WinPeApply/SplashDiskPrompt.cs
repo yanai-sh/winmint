@@ -39,12 +39,7 @@ internal static class SplashDiskPrompt
 
     internal static string Cue(SplashDisk disk) => "Press Enter to mark " + Name(disk) + ". The disk is not erased.";
 
-    private static string Name(SplashDisk disk)
-    {
-        return string.IsNullOrWhiteSpace(disk.Model)
-            ? string.Create(CultureInfo.InvariantCulture, $"Disk {disk.Number}, {disk.Size}")
-            : string.Create(CultureInfo.InvariantCulture, $"Disk {disk.Number}, {disk.Size}, {disk.Model}");
-    }
+    private static string Name(SplashDisk disk) => string.Create(CultureInfo.InvariantCulture, $"(Disk {disk.Number})");
 
     internal readonly record struct Box(int X, int Y, int W, int H)
     {
@@ -71,38 +66,21 @@ internal static class SplashDiskPrompt
             : string.Create(CultureInfo.InvariantCulture, $"{core}  {disk.Model}");
     }
 
-    internal static PromptLayout Measure(int width, int height, int dpi, int rows, int minY = 0, string? status = null)
+    internal static PromptLayout Measure(int width, int dpi, int rows, int minY = 0)
     {
         width = Math.Max(width, 1);
-        height = Math.Max(height, 1);
         rows = Math.Max(rows, 0);
         int gutter = width < Px(640, dpi) ? Px(24, dpi) : Px(80, dpi);
         int column = Math.Min(Px(560, dpi), Math.Max(Px(240, dpi), width - (2 * gutter)));
         int margin = Math.Max(0, (width - column) / 2);
         int origin = Math.Max(0, minY);
-        int limit = Math.Max(height, 1) - Px(24, dpi);
-        string statusText = string.IsNullOrEmpty(status) ? Lead : status;
-        int statusLines = Lines(statusText, column, dpi);
         int rowH = Px(40, dpi);
         int rowGap = rows > 1 ? Px(8, dpi) : 0;
-        Box statusBox = new(margin, origin, column, Px(24, dpi) * statusLines);
+        Box statusBox = new(margin, origin, column, Px(24, dpi));
         int listY = statusBox.Bottom + Px(12, dpi);
         int listH = rows == 0 ? 0 : (rows * rowH) + ((rows - 1) * rowGap);
-        if (rows > 0 && (listY + listH) > limit && statusLines > 1)
-        {
-            statusLines = 1;
-            statusBox = new(margin, origin, column, Px(24, dpi));
-            listY = statusBox.Bottom + Px(12, dpi);
-        }
-
         Box list = new(margin, listY, column, listH);
         return new PromptLayout(margin, default, statusBox, list, rowH, rowGap);
-    }
-
-    private static int Lines(string text, int column, int dpi)
-    {
-        int perLine = Math.Max(8, column / Px(9, dpi));
-        return Math.Clamp((text.Length + perLine - 1) / perLine, 1, 4);
     }
 
     internal static int RowAt(PromptLayout layout, int rows, int x, int y)
@@ -146,15 +124,14 @@ internal sealed class SplashPromptPainter : IDisposable
     internal void Paint(HDC hdc, RECT client, int dpi, IReadOnlyList<SplashDisk> disks, int focus, int marked)
     {
         int width = client.right - client.left;
-        int height = client.bottom - client.top;
         int minY = HeroBand(hdc, client, dpi);
         string status = Status(disks, focus, marked);
-        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, dpi, disks.Count, minY, status);
+        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, dpi, disks.Count, minY);
         _layout = layout;
         _rows = disks.Count;
         _hasLayout = true;
         EnsureFonts(dpi);
-        Text(hdc, _body, Ink, status, client, layout.Status, wrap: true, center: true);
+        Text(hdc, _body, Ink, status, client, layout.Status, wrap: false, center: true);
 
         for (int i = 0; i < disks.Count; i++)
         {
