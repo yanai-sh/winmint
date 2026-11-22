@@ -138,15 +138,22 @@ public class WinPeApplyPlanTests
         int diskpartAt = payload.IndexOf("diskpart /s", StringComparison.Ordinal);
         Assert.True(seeAt >= 0 && installAt > seeAt && findAt > installAt && diskpartAt > installAt,
             "A stick without the install file must shut down before diskpart and before boot-disk resolution.");
-        int earlyAt = payload.IndexOf("if not exist \"%SEEN%:\\winmint-install.txt\"", StringComparison.Ordinal);
+        int unarmedAt = payload.IndexOf("install file is not present", StringComparison.Ordinal);
         int initAt = payload.IndexOf("call :winmint_init_pe", StringComparison.Ordinal);
-        int longAt = payload.IndexOf(
+        int wpeinitAt = payload.IndexOf("wpeinit -unattend:", StringComparison.Ordinal);
+        int searchAt = payload.IndexOf(
             "for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload",
             StringComparison.Ordinal);
-        Assert.True(earlyAt >= 0 && initAt > earlyAt && longAt > initAt && installAt > longAt,
-            "A missing install file must shut down before wpeinit, and wpeinit before the long payload search.");
+        Assert.True(
+            unarmedAt >= 0 && wpeinitAt >= 0 && initAt > unarmedAt && searchAt > initAt
+                && installAt > searchAt && wpeinitAt < searchAt && diskpartAt > wpeinitAt && diskpartAt > unarmedAt,
+            "An unarmed stick must shut down, and WinPE must start with network off, before the payload search and before diskpart.");
         Assert.Contains("wpeinit -unattend:\"%~dp0wpeinit.xml\"", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("call wpeinit", payload, StringComparison.Ordinal);
+        string wpeinitXml = File.ReadAllText(FindRepoFile("payload", "winpe", "wpeinit.xml"));
+        Assert.Contains("<EnableNetwork>false</EnableNetwork>", wpeinitXml, StringComparison.Ordinal);
+        Assert.Contains("processorArchitecture=\"arm64\"", wpeinitXml, StringComparison.Ordinal);
+        Assert.Contains("pass=\"windowsPE\"", wpeinitXml, StringComparison.Ordinal);
         Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);
         Assert.Contains("de94bba4-06d1-4d40-a16a-bfd50179d6ac", payload, StringComparison.OrdinalIgnoreCase);

@@ -19,6 +19,12 @@ $diskpartAt = $launch.IndexOf('diskpart /s', [StringComparison]::Ordinal)
 if ($armCheck -lt 0 -or $armCheck -ge $diskDiscovery -or $armCheck -ge $diskpartAt) {
     throw 'WinPE must read winmint-install.txt before it resolves the boot disk'
 }
+$unarmedAt = $launch.IndexOf('install file is not present', [StringComparison]::Ordinal)
+$initPeAt = $launch.IndexOf('call :winmint_init_pe', [StringComparison]::Ordinal)
+$seenLoopAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload', [StringComparison]::Ordinal)
+if ($unarmedAt -lt 0 -or $initPeAt -le $unarmedAt -or $seenLoopAt -le $initPeAt) {
+    throw 'unarmed shutdown must run before call :winmint_init_pe, and that call must run before the payload search'
+}
 $confirmAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install', [StringComparison]::Ordinal)
 $reinstallDel = $launch.IndexOf('del /f /q "%INSTALL%:\winmint-reinstall.txt"', [StringComparison]::Ordinal)
 $bootMiss = $launch.IndexOf('install.wim not found on the boot disk', [StringComparison]::Ordinal)
@@ -201,7 +207,7 @@ $harness = @('@echo off', 'setlocal EnableExtensions') + @($gate) + @(
 ) + @($launchLines[$seeStart..($seeStop - 1)])
 foreach ($line in $harness) {
     if ($line.Trim() -match '^(rem\b|::)') { continue }
-    foreach ($danger in @('diskpart', 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format')) {
+    foreach ($danger in @('diskpart', 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'wpeinit', 'format')) {
         if ($line -match $danger) { throw "refusing to run the install-file gate: '$danger' leaked into the harness" }
     }
 }

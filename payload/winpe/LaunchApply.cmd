@@ -8,7 +8,19 @@ if not defined WINMINT_QE (
   start "WinMint" /wait /d "%~dp0" "%ComSpec%" /c "%~f0" %*
   exit /b %ERRORLEVEL%
 )
+goto :winmint_start
+
+:winmint_init_pe
 echo WinMint: initializing Windows PE...
+rem A missing unattend must not fall back to bare wpeinit. That wait is the blue screen.
+if not exist "%~dp0wpeinit.xml" (
+  echo WinMint: wpeinit.xml is missing. Network stays off.
+  goto :eof
+)
+wpeinit -unattend:"%~dp0wpeinit.xml"
+goto :eof
+
+:winmint_start
 rem The payload is often mounted already. A bare wpeinit turns the network on and
 rem waits on Wi-Fi DHCP, so the blue desktop never reaches shutdown.
 set INSTALL=
@@ -17,13 +29,14 @@ set PAYLOADDISK=
 set WINMINT_BOOT_TAG=
 set REINSTALL=
 set SEEN=
-for /L %%i in (1,1,3) do if not defined SEEN call :winmint_see_payload
+call :winmint_see_payload nowait
 if defined SEEN if not exist "%SEEN%:\winmint-boot-probe.txt" if not exist "%SEEN%:\winmint-reinstall.txt" if not exist "%SEEN%:\winmint-applied.txt" if not exist "%SEEN%:\winmint-install.txt" (
   echo WinMint: install file is not present.
   echo WinMint: the internal disk was not changed.
   wpeutil shutdown
   exit /b 0
 )
+set SEEN=
 call :winmint_init_pe
 set "PATH=%SystemRoot%\System32;%PATH%"
 rem Microsoft: wpeutil UpdateBootInfo records the volume WinPE booted from.
@@ -261,12 +274,6 @@ echo WinMint: apply complete. Rebooting into installed Windows...
 wpeutil reboot
 exit /b 0
 
-:winmint_init_pe
-rem A missing unattend must not fall back to bare wpeinit. That wait is the blue screen.
-if not exist "%~dp0wpeinit.xml" goto :eof
-wpeinit -unattend:"%~dp0wpeinit.xml"
-goto :eof
-
 :winmint_boot_probe
 set WINMINT_PROBE_CHALLENGE=
 for %%f in ("%INSTALL%:\winmint-boot-probe.txt") do if not "%%~zf"=="32" goto :winmint_boot_probe_invalid
@@ -442,7 +449,8 @@ for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
   if not defined SEEN if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set "SEEN=%%d"
   if exist %%d:\usb-media.json if exist %%d:\sources\install.wim if exist %%d:\winmint-boot-probe.txt set "SEEN=%%d"
 )
-if not defined SEEN (
+rem nowait: the unarmed check looks once. A missing letter must not sit on timeout before wpeinit.
+if not defined SEEN if not "%~1"=="nowait" (
   mountvol /e >nul 2>&1
   timeout /t 1 /nobreak >nul 2>&1
 )
