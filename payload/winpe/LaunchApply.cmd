@@ -21,7 +21,31 @@ set INSTALL=
 set BOOTDISK=
 set PAYLOADDISK=
 set WINMINT_BOOT_TAG=
-for /L %%i in (1,1,10) do if not defined INSTALL call :winmint_find_install
+set REINSTALL=
+set SEEN=
+for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload
+if not defined SEEN (
+  echo WinMint: install.wim not found on any drive
+  exit /b 1
+)
+set INSTALL=%SEEN%
+rem Markers are on the payload letter. diskpart starts only after the install file is present.
+if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
+rem A second boot of this USB must not erase the disk. A finished install turns the PC off.
+if not exist "%INSTALL%:\winmint-reinstall.txt" if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
+if not exist "%INSTALL%:\winmint-install.txt" (
+  echo WinMint: install file is not present.
+  echo WinMint: the internal disk was not changed.
+  wpeutil shutdown
+  exit /b 0
+)
+if exist "%INSTALL%:\winmint-reinstall.txt" (
+  del /f /q "%INSTALL%:\winmint-reinstall.txt"
+  set REINSTALL=1
+  echo WinMint: reinstall requested. The internal disk will be erased.
+)
+set INSTALL=
+call :winmint_find_install
 if not defined INSTALL (
   if defined WINMINT_BOOT_TAG (
     echo WinMint: install.wim not found on any drive
@@ -30,21 +54,17 @@ if not defined INSTALL (
   )
   exit /b 1
 )
+if not exist "%INSTALL%:\winmint-install.txt" (
+  echo WinMint: install file is not present.
+  echo WinMint: the internal disk was not changed.
+  wpeutil shutdown
+  exit /b 0
+)
 if defined BOOTDISK (
   echo WinMint: boot disk %BOOTDISK%, install.wim on %INSTALL%:
 ) else (
   echo WinMint: boot letter was not recorded. Payload disk %PAYLOADDISK% on %INSTALL%: is excluded.
 )
-rem Test-only media asks WinPE to prove that firmware booted the removable path and
-rem that its NTFS payload was visible. This exits before enumerating target disks.
-if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
-rem A second boot of this USB must not clean the disk. A finished install turns the PC off.
-if exist "%INSTALL%:\winmint-reinstall.txt" (
-  del /f /q "%INSTALL%:\winmint-reinstall.txt"
-  set REINSTALL=1
-  echo WinMint: reinstall requested. The internal disk will be erased.
-)
-if not defined REINSTALL if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
 set WORK=%TEMP%\winmint
 if not exist "%WORK%" mkdir "%WORK%"
 set LIST=%WORK%\disks.txt
@@ -332,6 +352,17 @@ if defined OVERRIDE (
   if errorlevel 1 goto :eof
 )
 if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
+goto :eof
+
+rem Payload letter only. No diskpart. The boot-disk check is winmint_find_install, after the arm gate.
+:winmint_see_payload
+for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
+  if not defined SEEN if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set "SEEN=%%d"
+)
+if not defined SEEN (
+  mountvol /e >nul 2>&1
+  timeout /t 1 /nobreak >nul 2>&1
+)
 goto :eof
 
 rem Called from the install retry. Each call is parsed afresh, so BOOTDISK and

@@ -144,6 +144,9 @@ if ($layout -match 'DestructiveToken|Clear-Disk') {
 if ($layout -match 'BusType') {
     throw 'USB layout must not require a USB bus'
 }
+if ($writer -match 'winmint-install\.txt' -or $layout -match 'winmint-install\.txt') {
+    throw 'USB publish must not plant winmint-install.txt; the maintainer places that file'
+}
 $tokens = $null
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($layoutPath, [ref] $tokens, [ref] $parseErrors)
