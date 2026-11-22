@@ -75,15 +75,16 @@ public class SplashDiskPromptTests
     public void Prompt_copy_names_the_disk_and_says_it_was_not_erased()
     {
         Assert.Equal("Target disk", SplashDiskPrompt.Heading);
-        Assert.Equal("Nothing is selected. Press the arrow keys.", SplashDiskPrompt.Lead);
+        Assert.Equal("Nothing is selected. Press the arrow keys, or click a disk.", SplashDiskPrompt.Lead);
+        Assert.Equal("*", SplashDiskPrompt.Asterisk);
         Assert.Equal(
-            "Press Enter to mark Disk 1, 953 GB, WD_BLACK SN850X. The disk is not erased.",
+            "Press Enter to mark (Disk 1). The disk is not erased.",
             SplashDiskPrompt.Cue(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")));
         Assert.Equal("Disk 2  29 GB", SplashDiskPrompt.RowLabel(new SplashDisk(2, "29 GB", "")));
         Assert.Equal("2 disks listed.", SplashDiskPrompt.Fact(2));
         Assert.Equal("No disk was listed.", SplashDiskPrompt.Fact(0));
         Assert.Equal(
-            "Disk 1, 953 GB, WD_BLACK SN850X is marked. The disk was not erased.",
+            "(Disk 1) is marked. The disk was not erased.",
             SplashDiskPrompt.Marked(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")));
     }
 
@@ -107,26 +108,21 @@ public class SplashDiskPromptTests
     {
         Assert.True(BrandLockup.TryFrame(width, height, out _, out int heroY, out _, out int heroH));
         int minY = SplashDiskPrompt.PromptTop(heroY + heroH, 96);
-        string[] facts =
-        [
-            SplashDiskPrompt.Lead,
-            SplashDiskPrompt.Cue(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")),
-            SplashDiskPrompt.Marked(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")),
-        ];
+        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, 96, 3, minY);
+        int rightGap = width - layout.Status.Right;
+        int bottom = layout.List.H == 0 ? layout.Status.Bottom : layout.List.Bottom;
 
-        foreach (string fact in facts)
-        {
-            SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, 96, 3, minY, fact);
-            int rightGap = width - layout.Status.Right;
-            int bottom = layout.List.H == 0 ? layout.Status.Bottom : layout.List.Bottom;
-
-            Assert.Equal(0, layout.Mark.H);
-            Assert.True(layout.Status.Y >= minY);
-            Assert.InRange(Math.Abs(layout.Margin - rightGap), 0, 1);
-            Assert.True(layout.Status.Bottom <= layout.List.Y);
-            Assert.True(bottom <= height - 24);
-            Assert.Equal(layout.Status.X, layout.List.X);
-            Assert.Equal(layout.Status.Right, layout.List.Right);
-        }
+        Assert.Equal(0, layout.Mark.H);
+        Assert.Equal(24, layout.Status.H);
+        Assert.True(layout.Status.Y >= minY);
+        Assert.InRange(Math.Abs(layout.Margin - rightGap), 0, 1);
+        Assert.True(layout.Status.Bottom <= layout.List.Y);
+        Assert.True(bottom <= height - 24);
+        Assert.Equal(layout.Status.X, layout.List.X);
+        Assert.Equal(layout.Status.Right, layout.List.Right);
+        Assert.Equal(0, SplashDiskPrompt.RowAt(layout, 3, layout.List.X + 4, layout.List.Y + 2));
+        Assert.Equal(1, SplashDiskPrompt.RowAt(layout, 3, layout.List.Right - 2, layout.List.Y + layout.RowHeight + layout.RowGap + 2));
+        Assert.Equal(-1, SplashDiskPrompt.RowAt(layout, 3, layout.List.X - 1, layout.List.Y + 2));
+        Assert.Equal(-1, SplashDiskPrompt.RowAt(layout, 3, layout.List.X + 4, layout.List.Y + layout.RowHeight));
     }
 }
