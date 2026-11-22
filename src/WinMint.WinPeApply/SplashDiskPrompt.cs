@@ -7,8 +7,8 @@ using Windows.Win32.Graphics.Gdi;
 namespace WinMint.WinPeApply;
 
 /// <summary>
-/// Centered disk lines under the large lockup. A mint asterisk marks the focused row.
-/// Arrow keys and a click move it. Enter marks that disk. There is no second control.
+/// Centered disk lines under the large lockup. The first disk starts focused.
+/// A mint asterisk marks that row. Arrow keys and a click move it. Enter marks that disk.
 /// </summary>
 internal static class SplashDiskPrompt
 {
@@ -19,6 +19,8 @@ internal static class SplashDiskPrompt
     internal const int HeroGap = 16;
 
     internal static int PromptTop(int heroBottom, int dpi) => heroBottom + Px(HeroGap, dpi);
+
+    internal static int InitialFocus(int count) => count > 0 ? 0 : -1;
 
     internal static string Fact(int count)
     {
@@ -112,7 +114,6 @@ internal sealed class SplashPromptPainter : IDisposable
 {
     private static readonly COLORREF Ink = new(0x00FBF7F3);
     private static readonly COLORREF Mint = new(0x008CD04C);
-    private static readonly COLORREF Hair = new(0x005C5C5C);
 
     private HFONT _body;
     private int _dpi = 96;
@@ -162,7 +163,6 @@ internal sealed class SplashPromptPainter : IDisposable
     {
         int y = client.top + layout.List.Y + (index * (layout.RowHeight + layout.RowGap));
         int x = client.left + layout.List.X;
-        Hairline(hdc, x, y + layout.RowHeight - 1, x + layout.List.W);
         int markW = SplashDiskPrompt.Px(SplashDiskPrompt.AsteriskWidth, _dpi);
         if (focused)
         {
@@ -188,20 +188,6 @@ internal sealed class SplashPromptPainter : IDisposable
             wrap: false,
             absolute: true,
             center: true);
-    }
-
-    private static void Hairline(HDC hdc, int x0, int y, int x1)
-    {
-        HPEN pen = PInvoke.CreatePen(PEN_STYLE.PS_SOLID, 1, Hair);
-        HGDIOBJ old = PInvoke.SelectObject(hdc, pen);
-        unsafe
-        {
-            _ = PInvoke.MoveToEx(hdc, x0, y, null);
-            _ = PInvoke.LineTo(hdc, x1, y);
-        }
-
-        _ = PInvoke.SelectObject(hdc, old);
-        _ = PInvoke.DeleteObject(pen);
     }
 
     private static int HeroBand(HDC hdc, RECT client, int dpi)

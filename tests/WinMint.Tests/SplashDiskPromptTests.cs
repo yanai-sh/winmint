@@ -77,6 +77,9 @@ public class SplashDiskPromptTests
         Assert.Equal("Target disk", SplashDiskPrompt.Heading);
         Assert.Equal("Nothing is selected. Press the arrow keys, or click a disk.", SplashDiskPrompt.Lead);
         Assert.Equal("*", SplashDiskPrompt.Asterisk);
+        Assert.Equal(0, SplashDiskPrompt.InitialFocus(1));
+        Assert.Equal(0, SplashDiskPrompt.InitialFocus(3));
+        Assert.Equal(-1, SplashDiskPrompt.InitialFocus(0));
         Assert.Equal(
             "Press Enter to mark (Disk 1). The disk is not erased.",
             SplashDiskPrompt.Cue(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")));
