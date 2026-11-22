@@ -52,11 +52,11 @@ public class PackagesProofTests
         IReadOnlyList<PackagesProofEntry> entries =
         [
             new("scoop", "starship", "main"),
-            new("winget", "Git.MinGit", null),
+            new("winget", "Git.Git", null),
         ];
-        // Intentionally unsorted input; hash must match sorted "scoop:starship\nwinget:Git.MinGit\n"
+        // Intentionally unsorted input; hash must match sorted "scoop:starship\nwinget:Git.Git\n"
         string expected = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes("scoop:starship\nwinget:Git.MinGit\n")))
+            SHA256.HashData(Encoding.UTF8.GetBytes("scoop:starship\nwinget:Git.Git\n")))
             .ToLowerInvariant();
         Assert.Equal(expected, PackagesProof.ProveSetSha256(entries));
     }
@@ -119,14 +119,14 @@ public class PackagesProofTests
     }
 
     /// <summary>
-    /// MinGit is the product constant; full Git for Windows carries an MSYS2 bash payload
-    /// we never install. Offering it in the catalog is enough for a Profile to opt in.
+    /// Full Git for Windows is the product constant: Cursor CLI agent workers need Git Bash,
+    /// which MinGit does not ship.
     /// </summary>
     [Fact]
-    public void Default_catalog_offers_MinGit_not_full_git()
+    public void Default_catalog_offers_full_git_not_MinGit()
     {
-        Assert.False(PackageCatalog.Default.TryGetToolByInstallId("Git.Git", out _));
-        Assert.True(PackageCatalog.Default.TryGetToolByInstallId(ProductPosture.MinGitWingetId, out _));
+        Assert.False(PackageCatalog.Default.TryGetToolByInstallId("Git.MinGit", out _));
+        Assert.True(PackageCatalog.Default.TryGetToolByInstallId(ProductPosture.GitWingetId, out _));
     }
 
     [Fact]

@@ -363,7 +363,7 @@ if ($expectFu) {
         }
     }
     foreach ($needId in @(
-            'Git.MinGit',
+            'Git.Git',
             'Microsoft.PowerShell',
             'Microsoft.WindowsTerminal',
             'Microsoft.Coreutils',

@@ -85,10 +85,10 @@
       "id": "jqlang.jq",
       "architectures": ["amd64", "arm64"]
     },
-    "mingit": {
-      "displayName": "MinGit",
+    "git": {
+      "displayName": "Git for Windows",
       "source": "winget",
-      "id": "Git.MinGit",
+      "id": "Git.Git",
       "architectures": ["amd64", "arm64"]
     },
     "powershell": {

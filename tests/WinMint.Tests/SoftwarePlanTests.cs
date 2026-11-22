@@ -25,7 +25,7 @@ public class SoftwarePlanTests
 
         PackagePlanSlice slice = planned.Value;
         Assert.Contains("Anysphere.Cursor", slice.EffectiveWinget);
-        Assert.Contains(ProductPosture.MinGitWingetId, slice.EffectiveWinget);
+        Assert.Contains(ProductPosture.GitWingetId, slice.EffectiveWinget);
         Assert.Contains("curl", slice.EffectiveScoop);
         Assert.Contains("FedoraLinux-44", slice.EffectiveWsl);
         Assert.True(slice.PackageWireHonest);

@@ -19,7 +19,7 @@ public class HostReviewCopyTests
         Assert.Contains("consumer features off", text, StringComparison.Ordinal);
         Assert.Contains("Store suggested apps off", text, StringComparison.Ordinal);
         Assert.Contains("Reserved Storage", text, StringComparison.Ordinal);
-        Assert.Contains("MinGit", text, StringComparison.Ordinal);
+        Assert.Contains("Git for Windows", text, StringComparison.Ordinal);
         Assert.Contains("PowerShell 7", text, StringComparison.Ordinal);
         Assert.Contains("Windows Terminal", text, StringComparison.Ordinal);
         Assert.Contains("Nilesoft Shell", text, StringComparison.Ordinal);

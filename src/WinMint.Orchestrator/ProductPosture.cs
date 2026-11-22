@@ -11,7 +11,7 @@ namespace WinMint.Orchestrator;
 public static class ProductPosture
 {
     public const string BraveWingetId = PackageIds.Brave;
-    public const string MinGitWingetId = "Git.MinGit";
+    public const string GitWingetId = "Git.Git";
     public const string PowerShellWingetId = "Microsoft.PowerShell";
     public const string WindowsTerminalWingetId = "Microsoft.WindowsTerminal";
     public const string CoreutilsWingetId = "Microsoft.Coreutils";
@@ -20,10 +20,10 @@ public static class ProductPosture
     public const string KomorebiWingetId = PackageIds.Komorebi;
     public const string WhkdWingetId = "LGUG2Z.whkd";
 
-    /// <summary>Install order: MinGit, pwsh, Terminal, Coreutils, Nilesoft Shell.</summary>
+    /// <summary>Install order: Git for Windows, pwsh, Terminal, Coreutils, Nilesoft Shell.</summary>
     public static IReadOnlyList<string> WingetIds { get; } =
     [
-        MinGitWingetId,
+        GitWingetId,
         PowerShellWingetId,
         WindowsTerminalWingetId,
         CoreutilsWingetId,
@@ -215,7 +215,7 @@ public static class ProductPosture
         "Developer Mode",
         "dark theme / DND",
         "Reserved Storage",
-        "MinGit",
+        "Git for Windows",
         "PowerShell 7",
         "Windows Terminal",
         "Nilesoft Shell",

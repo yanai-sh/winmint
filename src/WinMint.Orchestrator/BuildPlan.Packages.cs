@@ -67,7 +67,7 @@ internal static class SoftwarePlan
         List<EffectivePackageFact> facts = [];
         List<string> auditTargets = [];
 
-        // Smoke plumbing: no ProductPosture winget/scoop merge (MinGit/Nilesoft/…) — offline FirstLogon.
+        // Smoke plumbing: no ProductPosture winget/scoop merge (Git/Nilesoft/…) — offline FirstLogon.
         IReadOnlyList<string> effectiveWingetIds = smokePlumbing
             ? []
             : ProductPosture.MergeWinget(wingetPackages);

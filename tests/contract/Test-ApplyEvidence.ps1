@@ -157,7 +157,7 @@ try {
 '@
     Set-Content -LiteralPath (Join-Path $payload 'winget-import.json') -Encoding utf8 -Value @'
 {"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
-  {"PackageIdentifier":"Git.MinGit"},
+  {"PackageIdentifier":"Git.Git"},
   {"PackageIdentifier":"Microsoft.PowerShell"},
   {"PackageIdentifier":"Microsoft.WindowsTerminal"},
   {"PackageIdentifier":"Microsoft.Coreutils"},
@@ -198,7 +198,7 @@ try {
 '@
     Set-Content -LiteralPath (Join-Path $payload 'winget-import.json') -Encoding utf8 -Value @'
 {"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
-  {"PackageIdentifier":"Git.MinGit"},
+  {"PackageIdentifier":"Git.Git"},
   {"PackageIdentifier":"Microsoft.PowerShell"},
   {"PackageIdentifier":"Microsoft.WindowsTerminal"},
   {"PackageIdentifier":"Microsoft.Coreutils"},
@@ -234,7 +234,7 @@ try {
 '@
     Set-Content -LiteralPath (Join-Path $payload 'winget-import.json') -Encoding utf8 -Value @'
 {"Sources":[{"SourceDetails":{"Name":"winget","Identifier":"Microsoft.Winget.Source_8wekyb3d8bbwe","Argument":"https://cdn.winget.microsoft.com/cache","Type":"Microsoft.PreIndexed.Package"},"Packages":[
-  {"PackageIdentifier":"Git.MinGit"},
+  {"PackageIdentifier":"Git.Git"},
   {"PackageIdentifier":"Microsoft.PowerShell"},
   {"PackageIdentifier":"Microsoft.WindowsTerminal"},
   {"PackageIdentifier":"Microsoft.Coreutils"},

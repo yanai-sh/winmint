@@ -12,11 +12,11 @@ public class ProductPostureTests
     public void MergeWinget_constants_first_then_profile_deduped()
     {
         IReadOnlyList<string> merged = ProductPosture.MergeWinget(
-            ["Anysphere.Cursor", "Git.MinGit", "Nilesoft.Shell"]);
+            ["Anysphere.Cursor", "Git.Git", "Nilesoft.Shell"]);
 
         Assert.Equal(
             [
-                "Git.MinGit",
+                "Git.Git",
                 "Microsoft.PowerShell",
                 "Microsoft.WindowsTerminal",
                 "Microsoft.Coreutils",
@@ -30,7 +30,7 @@ public class ProductPostureTests
     public void StripWingetFromAuthored_drops_product_constants()
     {
         string stripped = ProductPosture.StripWingetFromAuthored(
-            "Git.MinGit\nAnysphere.Cursor\nMicrosoft.PowerShell\nNilesoft.Shell\njqlang.jq");
+            "Git.Git\nAnysphere.Cursor\nMicrosoft.PowerShell\nNilesoft.Shell\njqlang.jq");
 
         Assert.Equal($"Anysphere.Cursor{Environment.NewLine}jqlang.jq", stripped);
     }
@@ -305,7 +305,7 @@ public class ProductPostureTests
     }
 
     [Fact]
-    public void Plan_empty_winget_still_emits_mingit_and_nilesoft_import_on_arm64()
+    public void Plan_empty_winget_still_emits_git_and_nilesoft_import_on_arm64()
     {
         Profile profile = Lab(winget: []);
         Result<BuildArtifacts, Failure> result = BuildPlan.Plan(
@@ -323,7 +323,7 @@ public class ProductPostureTests
             .Select(p => p.GetProperty("PackageIdentifier").GetString()!)];
         Assert.Equal(
             [
-                "Git.MinGit",
+                "Git.Git",
                 "Microsoft.PowerShell",
                 "Microsoft.WindowsTerminal",
                 "Microsoft.Coreutils",
