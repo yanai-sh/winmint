@@ -101,11 +101,11 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch 'wpeutil shutdown') {
             $defects += 'LaunchApply.cmd must shut down instead of erasing when WinMint is already installed'
         }
-        $armAt = $body.IndexOf('if not exist "%INSTALL%:\winmint-install.txt"')
+        $installAt = $body.IndexOf('if not exist "%INSTALL%:\winmint-install.txt"')
         $seeAt = $body.IndexOf('call :winmint_see_payload')
         $diskpartAt = $body.IndexOf('diskpart /s')
-        if ($armAt -lt 0 -or $seeAt -lt 0 -or $findAt -lt 0 -or $diskpartAt -lt 0 -or
-            $seeAt -ge $armAt -or $armAt -ge $findAt -or $armAt -ge $diskpartAt) {
+        if ($installAt -lt 0 -or $seeAt -lt 0 -or $findAt -lt 0 -or $diskpartAt -lt 0 -or
+            $seeAt -ge $installAt -or $installAt -ge $findAt -or $installAt -ge $diskpartAt) {
             $defects += 'LaunchApply.cmd must read winmint-install.txt before diskpart and before it resolves the boot disk'
         }
         if ($body -notmatch '/offline /bootex') {

@@ -132,11 +132,11 @@ public class WinPeApplyPlanTests
             payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal)
                 < payload.IndexOf("echo clean", StringComparison.Ordinal),
             "The WinPE boot disk must be resolved before diskpart clean.");
-        int armAt = payload.IndexOf("if not exist \"%INSTALL%:\\winmint-install.txt\"", StringComparison.Ordinal);
+        int installAt = payload.IndexOf("if not exist \"%INSTALL%:\\winmint-install.txt\"", StringComparison.Ordinal);
         int seeAt = payload.IndexOf("call :winmint_see_payload", StringComparison.Ordinal);
         int findAt = payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal);
         int diskpartAt = payload.IndexOf("diskpart /s", StringComparison.Ordinal);
-        Assert.True(seeAt >= 0 && armAt > seeAt && findAt > armAt && diskpartAt > armAt,
+        Assert.True(seeAt >= 0 && installAt > seeAt && findAt > installAt && diskpartAt > installAt,
             "A stick without the install file must shut down before diskpart and before boot-disk resolution.");
         Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);

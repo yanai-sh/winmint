@@ -29,7 +29,7 @@ if not defined SEEN (
   exit /b 1
 )
 set INSTALL=%SEEN%
-rem Markers are on the payload letter. diskpart starts only after the install file is present.
+rem Markers stay on this letter. diskpart starts only after the install file is present.
 if exist "%INSTALL%:\winmint-boot-probe.txt" goto :winmint_boot_probe
 rem A second boot of this USB must not erase the disk. A finished install turns the PC off.
 if not exist "%INSTALL%:\winmint-reinstall.txt" if exist "%INSTALL%:\winmint-applied.txt" goto :winmint_finished
@@ -39,14 +39,8 @@ if not exist "%INSTALL%:\winmint-install.txt" (
   wpeutil shutdown
   exit /b 0
 )
-if exist "%INSTALL%:\winmint-reinstall.txt" (
-  del /f /q "%INSTALL%:\winmint-reinstall.txt"
-  set REINSTALL=1
-  echo WinMint: reinstall requested. The internal disk will be erased.
-)
-set INSTALL=
-call :winmint_find_install
-if not defined INSTALL (
+for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install
+if not defined PAYLOADDISK (
   if defined WINMINT_BOOT_TAG (
     echo WinMint: install.wim not found on any drive
   ) else (
@@ -54,11 +48,10 @@ if not defined INSTALL (
   )
   exit /b 1
 )
-if not exist "%INSTALL%:\winmint-install.txt" (
-  echo WinMint: install file is not present.
-  echo WinMint: the internal disk was not changed.
-  wpeutil shutdown
-  exit /b 0
+if exist "%INSTALL%:\winmint-reinstall.txt" (
+  del /f /q "%INSTALL%:\winmint-reinstall.txt"
+  set REINSTALL=1
+  echo WinMint: reinstall requested. The internal disk will be erased.
 )
 if defined BOOTDISK (
   echo WinMint: boot disk %BOOTDISK%, install.wim on %INSTALL%:
@@ -354,10 +347,11 @@ if defined OVERRIDE (
 if defined TARGET (set EXTRA=1) else (set TARGET=%N%)
 goto :eof
 
-rem Payload letter only. No diskpart. The boot-disk check is winmint_find_install, after the arm gate.
+rem Payload letter only. No diskpart. The boot-disk check is winmint_find_install, after the install file.
 :winmint_see_payload
 for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
   if not defined SEEN if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set "SEEN=%%d"
+  if exist %%d:\usb-media.json if exist %%d:\sources\install.wim if exist %%d:\winmint-boot-probe.txt set "SEEN=%%d"
 )
 if not defined SEEN (
   mountvol /e >nul 2>&1
@@ -374,10 +368,9 @@ if not defined BOOTDISK if not defined WINMINT_BOOT_TAG (
   timeout /t 1 /nobreak >nul 2>&1
   goto :eof
 )
-for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
-  if not defined INSTALL if exist %%d:\usb-media.json if exist %%d:\sources\install.wim call :winmint_accept_install %%d
-)
-if not defined INSTALL (
+if not defined INSTALL goto :eof
+call :winmint_accept_install %INSTALL%
+if not defined PAYLOADDISK (
   mountvol /e >nul 2>&1
   timeout /t 1 /nobreak >nul 2>&1
 )
