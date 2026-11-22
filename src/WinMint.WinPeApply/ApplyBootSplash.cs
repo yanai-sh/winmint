@@ -46,7 +46,7 @@ internal static class ApplyBootSplash
     }
 
     /// <summary>
-    /// Host preview of the apply splash, plus the disk list. Does not start LaunchApply.
+    /// Host preview of the apply splash, plus the disk list under that lockup. Does not start LaunchApply.
     /// Esc closes the window. Choosing a disk does not change it.
     /// </summary>
     internal static void HoldForPreview()

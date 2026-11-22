@@ -84,23 +84,52 @@ public class SplashDiskPromptTests
             SplashDiskPrompt.Marked(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")));
     }
 
+    [Fact]
+    public void Hero_frame_stays_the_large_lockup()
+    {
+        Assert.True(BrandLockup.TryFrame(1440, 900, out int x, out int y, out int width, out int height));
+        Assert.Equal(892, width);
+        Assert.Equal(223, height);
+        Assert.Equal(274, x);
+        Assert.Equal(288, y);
+    }
+
     [Theory]
     [InlineData(1440, 900)]
     [InlineData(1024, 768)]
     [InlineData(768, 1024)]
     [InlineData(390, 844)]
-    public void Layout_keeps_equal_edges_and_one_screen(int width, int height)
+    [InlineData(320, 844)]
+    public void Layout_keeps_the_hero_and_the_prompt_on_one_screen(int width, int height)
     {
-        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, 96, 3);
-        int rightGap = width - layout.HeadingBox.Right;
+        Assert.True(BrandLockup.TryFrame(width, height, out _, out int heroY, out _, out int heroH));
+        int minY = SplashDiskPrompt.PromptTop(heroY + heroH, 96);
+        string[] facts =
+        [
+            SplashDiskPrompt.Fact(3),
+            SplashDiskPrompt.Marked(new SplashDisk(1, "953 GB", "WD_BLACK SN850X")),
+        ];
 
-        Assert.InRange(Math.Abs(layout.Margin - rightGap), 0, 1);
-        Assert.True(layout.HeadingBox.Y < layout.List.Y);
-        Assert.True(layout.Button.Y >= layout.List.Bottom);
-        Assert.True(layout.Button.Bottom <= height - 24);
-        Assert.True(layout.RowHeight >= 44);
-        Assert.True(layout.Button.H >= 44);
-        Assert.Equal(layout.HeadingBox.X, layout.List.X);
-        Assert.Equal(layout.HeadingBox.Right, layout.List.Right);
+        foreach (string fact in facts)
+        {
+            SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, 96, 3, minY, fact);
+            int rightGap = width - layout.HeadingBox.Right;
+
+            Assert.Equal(0, layout.Mark.H);
+            Assert.True(layout.HeadingBox.Y >= minY);
+            Assert.InRange(Math.Abs(layout.Margin - rightGap), 0, 1);
+            Assert.True(layout.HeadingBox.Y < layout.LeadBox.Y);
+            Assert.True(layout.LeadBox.Bottom <= layout.FactBox.Y);
+            Assert.True(layout.FactBox.Bottom <= layout.List.Y);
+            Assert.True(layout.LeadBox.H >= 48);
+            Assert.True(layout.HeadingBox.Y < layout.List.Y);
+            Assert.True(layout.Button.Y >= layout.List.Bottom);
+            Assert.True(layout.Button.Bottom <= height - 24);
+            Assert.True(layout.RowHeight >= 44);
+            Assert.True(layout.Button.H >= 44);
+            Assert.Equal(layout.HeadingBox.X, layout.List.X);
+            Assert.Equal(layout.HeadingBox.X, layout.Button.X);
+            Assert.Equal(layout.HeadingBox.Right, layout.List.Right);
+        }
     }
 }

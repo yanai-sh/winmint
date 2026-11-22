@@ -7,14 +7,17 @@ using Windows.Win32.Graphics.Gdi;
 namespace WinMint.WinPeApply;
 
 /// <summary>
-/// One screen: the target-disk prompt. Equal side margins, nothing selected until Enter.
-/// Choosing a row does not erase the disk.
+/// Disk list drawn under the large lockup. Equal side margins, nothing selected until Enter.
+/// Choosing a row does not erase the disk. The lockup's own frame stays the apply splash.
 /// </summary>
 internal static class SplashDiskPrompt
 {
     internal const string Heading = "Target disk";
     internal const string Lead = "WinMint installs Windows on one whole disk. Nothing is selected until you press Enter.";
     internal const string Action = "Choose this disk";
+    internal const int HeroGap = 16;
+
+    internal static int PromptTop(int heroBottom, int dpi) => heroBottom + Px(HeroGap, dpi);
 
     internal static string Fact(int count)
     {
@@ -59,7 +62,7 @@ internal static class SplashDiskPrompt
 
     internal static int Px(int px, int dpi) => Math.Max(1, px * Math.Max(dpi, 96) / 96);
 
-    internal static PromptLayout Measure(int width, int height, int dpi, int rows)
+    internal static PromptLayout Measure(int width, int height, int dpi, int rows, int minY = 0, string? fact = null)
     {
         width = Math.Max(width, 1);
         height = Math.Max(height, 1);
@@ -67,65 +70,73 @@ internal static class SplashDiskPrompt
         int gutter = width < Px(640, dpi) ? Px(24, dpi) : Px(80, dpi);
         int column = Math.Min(Px(720, dpi), Math.Max(Px(240, dpi), width - (2 * gutter)));
         int margin = Math.Max(0, (width - column) / 2);
-        return Stack(height, dpi, rows, margin, column, showMark: true, leadLines: 3, rowGap: 8, top: 48);
+        int origin = Math.Max(0, minY);
+        int limit = height - Px(24, dpi);
+        string factText = string.IsNullOrEmpty(fact) ? Fact(rows) : fact;
+        int leadLines = Lines(Lead, column, dpi);
+        int factLines = Lines(factText, column, dpi);
+        PromptLayout layout = default;
+        foreach (Rhythm rhythm in Rhythms)
+        {
+            layout = Place(dpi, rows, margin, column, origin, leadLines, factLines, rhythm);
+            if (Fits(layout, rows, limit))
+            {
+                return layout;
+            }
+        }
+
+        layout = Place(dpi, rows, margin, column, origin, leadLines: 1, factLines: 1, Rhythms[^1]);
+        return layout;
     }
 
-    private static PromptLayout Stack(
-        int height,
+    private static int Lines(string text, int column, int dpi)
+    {
+        int perLine = Math.Max(8, column / Px(9, dpi));
+        return Math.Clamp((text.Length + perLine - 1) / perLine, 1, 6);
+    }
+
+    private static bool Fits(PromptLayout layout, int rows, int limit)
+    {
+        int bottom = rows == 0 ? layout.FactBox.Bottom : layout.Button.Bottom;
+        return bottom <= limit;
+    }
+
+    private static PromptLayout Place(
         int dpi,
         int rows,
         int margin,
         int column,
-        bool showMark,
+        int origin,
         int leadLines,
-        int rowGap,
-        int top)
+        int factLines,
+        Rhythm rhythm)
     {
-        int y = Px(top, dpi);
-        int markH = showMark ? Math.Min(Px(96, dpi), Math.Max(Px(48, dpi), column / 4)) : 0;
-        int markW = showMark ? Math.Min(column, markH * 4) : 0;
-        Box mark = new(margin, y, markW, markH);
-        if (showMark)
-        {
-            y = mark.Bottom + Px(32, dpi);
-        }
-
-        Box heading = new(margin, y, column, Px(40, dpi));
-        y = heading.Bottom + Px(16, dpi);
-        Box lead = new(margin, y, column, Px(24 * leadLines, dpi));
-        y = lead.Bottom + Px(16, dpi);
-        Box fact = new(margin, y, column, Px(48, dpi));
-        y = fact.Bottom + Px(24, dpi);
-        int rowH = Px(48, dpi);
-        int gap = rows > 1 ? Px(rowGap, dpi) : 0;
+        int y = origin;
+        Box heading = new(margin, y, column, Px(rhythm.Heading, dpi));
+        y = heading.Bottom + Px(rhythm.GapHead, dpi);
+        Box lead = new(margin, y, column, Px(24, dpi) * Math.Max(leadLines, 1));
+        y = lead.Bottom + Px(rhythm.GapLead, dpi);
+        Box fact = new(margin, y, column, Px(24, dpi) * Math.Max(factLines, 1));
+        y = fact.Bottom + Px(rhythm.GapFact, dpi);
+        int rowH = Px(rhythm.Row, dpi);
+        int gap = rows > 1 && rhythm.RowGap > 0 ? Px(rhythm.RowGap, dpi) : 0;
         int listH = rows == 0 ? 0 : (rows * rowH) + ((rows - 1) * gap);
         Box list = new(margin, y, column, listH);
-        y = (rows == 0 ? fact.Bottom : list.Bottom) + Px(32, dpi);
+        y = (rows == 0 ? fact.Bottom : list.Bottom) + Px(rhythm.GapButton, dpi);
         int buttonW = margin + column < Px(640, dpi) ? column : Math.Min(column, Px(196, dpi));
         Box button = new(margin, y, buttonW, Px(44, dpi));
-        int limit = height - Px(24, dpi);
-        if (button.Bottom > limit && showMark)
-        {
-            return Stack(height, dpi, rows, margin, column, showMark: false, leadLines, rowGap, top);
-        }
-
-        if (button.Bottom > limit && leadLines > 1)
-        {
-            return Stack(height, dpi, rows, margin, column, showMark, leadLines: 1, rowGap, top);
-        }
-
-        if (button.Bottom > limit && rowGap > 0)
-        {
-            return Stack(height, dpi, rows, margin, column, showMark, leadLines, rowGap: 0, top);
-        }
-
-        if (button.Bottom > limit && top > 24)
-        {
-            return Stack(height, dpi, rows, margin, column, showMark, leadLines, rowGap, top: 24);
-        }
-
-        return new PromptLayout(margin, mark, heading, lead, fact, list, rowH, gap, button);
+        return new PromptLayout(margin, default, heading, lead, fact, list, rowH, gap, button);
     }
+
+    // Roomy first. Later rows only give up gap and row height, never the lockup above them.
+    private static readonly Rhythm[] Rhythms =
+    [
+        new(40, 12, 12, 16, 48, 8, 24),
+        new(40, 8, 8, 8, 48, 0, 16),
+        new(32, 4, 4, 4, 44, 0, 8),
+    ];
+
+    private readonly record struct Rhythm(int Heading, int GapHead, int GapLead, int GapFact, int Row, int RowGap, int GapButton);
 }
 
 internal sealed class SplashPromptPainter : IDisposable
@@ -156,18 +167,15 @@ internal sealed class SplashPromptPainter : IDisposable
     {
         int width = client.right - client.left;
         int height = client.bottom - client.top;
-        EnsureFonts(dpi, width);
-        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, _dpi, disks.Count);
-        if (layout.Mark.H >= 16)
-        {
-            _ = BrandLockup.TryBlitAt(hdc, client.left + layout.Mark.X, client.top + layout.Mark.Y, layout.Mark.W, layout.Mark.H, out _);
-        }
-
-        Text(hdc, _heading, Ink, SplashDiskPrompt.Heading, client, layout.HeadingBox, wrap: false);
-        Text(hdc, _body, Ink, SplashDiskPrompt.Lead, client, layout.LeadBox, wrap: true);
+        int minY = HeroBand(hdc, client, dpi);
         string fact = marked >= 0 && marked < disks.Count
             ? SplashDiskPrompt.Marked(disks[marked])
             : SplashDiskPrompt.Fact(disks.Count);
+        SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, dpi, disks.Count, minY, fact);
+        EnsureFonts(dpi, layout.HeadingBox.H);
+
+        Text(hdc, _heading, Ink, SplashDiskPrompt.Heading, client, layout.HeadingBox, wrap: false);
+        Text(hdc, _body, Ink, SplashDiskPrompt.Lead, client, layout.LeadBox, wrap: true);
         Text(hdc, _body, Ink, fact, client, layout.FactBox, wrap: true);
 
         for (int i = 0; i < disks.Count; i++)
@@ -226,7 +234,10 @@ internal sealed class SplashPromptPainter : IDisposable
 
     private void DrawButton(HDC hdc, RECT client, SplashDiskPrompt.PromptLayout layout, bool armed, bool pressed)
     {
-        int y = client.top + layout.Button.Y + (armed && pressed ? SplashDiskPrompt.Px(PressPx, _dpi) : 0);
+        int shift = armed
+            ? (pressed ? SplashDiskPrompt.Px(PressPx, _dpi) : -SplashDiskPrompt.Px(1, _dpi))
+            : 0;
+        int y = client.top + layout.Button.Y + shift;
         int x = client.left + layout.Button.X;
         COLORREF fill = armed ? (pressed ? MintPress : MintHover) : Ground;
         COLORREF edge = armed ? fill : Muted;
@@ -243,9 +254,22 @@ internal sealed class SplashPromptPainter : IDisposable
             center: true);
     }
 
-    private void EnsureFonts(int dpi, int width)
+    private static int HeroBand(HDC hdc, RECT client, int dpi)
     {
-        int headingPx = width < SplashDiskPrompt.Px(640, dpi) ? 28 : 32;
+        if (BrandLockup.TryBlit(hdc, client, out int bottom))
+        {
+            return SplashDiskPrompt.PromptTop(bottom - client.top, dpi);
+        }
+
+        // Same fallback placement as the apply splash: the icon, then the progress row.
+        int cy = (client.top + client.bottom) / 2;
+        BrandMark.Draw(hdc, (client.left + client.right) / 2, cy - 28);
+        return (cy + 78) - client.top;
+    }
+
+    private void EnsureFonts(int dpi, int headingBox)
+    {
+        int headingPx = headingBox >= SplashDiskPrompt.Px(40, dpi) ? 32 : 28;
         if (_ready && _dpi == dpi && _headingPx == headingPx)
         {
             return;
@@ -330,7 +354,7 @@ internal sealed class SplashPromptPainter : IDisposable
             right = x + Math.Max(box.W, 1),
             bottom = y + Math.Max(box.H, 1),
         };
-        DRAW_TEXT_FORMAT flags = DRAW_TEXT_FORMAT.DT_NOPREFIX | DRAW_TEXT_FORMAT.DT_NOCLIP;
+        DRAW_TEXT_FORMAT flags = DRAW_TEXT_FORMAT.DT_NOPREFIX;
         flags |= center ? DRAW_TEXT_FORMAT.DT_CENTER : DRAW_TEXT_FORMAT.DT_LEFT;
         flags |= wrap
             ? DRAW_TEXT_FORMAT.DT_WORDBREAK | DRAW_TEXT_FORMAT.DT_TOP
