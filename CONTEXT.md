@@ -99,11 +99,14 @@ _Avoid_: “metal” (retired name — it never touched hardware); treating a Te
 _Avoid_: calling Gate B “Primary”; treating a green Gate B as permission to flash the current Output ISO; selling soft Host Apply Release as wipe media; re-deriving Gate B from lane alone or package-strict alone; equating PS lane∧strict with wipe-ready when WSL wire is dishonest; scraping `stages.json` for package pins when expected-evidence already lists them
 
 **Primary** — Release `samples/sl7.profile.json` would be safe to wipe the primary SL7 only after Gate B + real install evidence in-repo. That bar is unmet while the Output ISO is unstable. Checklist: [issue #96](https://github.com/yanai-sh/winmint/issues/96).  
-_Avoid_: installing the current Output ISO; shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof
+_Avoid_: installing the current Output ISO; shipping recovery images; treating Gate B alone as wipe-proven; gating Primary on a tracking issue; treating Flash as Primary proof; treating the Install file as Primary proof
 
 **Image quality** — Run override `Test` | `Release` (not Profile).
 
-**Install engine** — WinPE apply only (no Setup `/legacy`).
+**Install engine** — WinPE apply only (no Setup `/legacy`). Erases a disk only when an **Install file** is present ([ADR-020](docs/decisions/ADR-020-install-file.md)).
+
+**Install file** — The maintainer's permission for the Install engine to erase the target disk. Absent, that engine shuts down before it selects a disk.
+_Avoid_: arm file; Apply flag; Host Apply; splash or Setup disk page; one remaining disk as permission; reinstall marker; Primary proof; Output ISO
 
 **Debloat** — Remove-list posture for AppX / capabilities / optional features. Profile fields are `debloat.*`. Host presets (`recommended`, Acceptance, empty) expand to lists; never write preset names into JSON. Wizard chrome uses **Station outcome**, not these preset ids.  
 _Avoid_: Keep-flag (retired name); keep-list polarity; BCU; CDM as primary; Profile preset names; Wizard cleanup-preset UI after Station outcomes land

@@ -1,4 +1,4 @@
-#requires -Version 7.6
+﻿#requires -Version 7.6
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -9,10 +9,15 @@ function Read-RepoText([string] $RelativePath) {
 
 $launch = Read-RepoText 'payload/winpe/LaunchApply.cmd'
 $probeCheck = $launch.IndexOf('if exist "%INSTALL%:\winmint-boot-probe.txt"', [StringComparison]::Ordinal)
-$diskDiscovery = $launch.IndexOf('set WORK=%TEMP%\winmint', [StringComparison]::Ordinal)
+$diskDiscovery = $launch.IndexOf('call :winmint_find_install', [StringComparison]::Ordinal)
 $probeLabel = $launch.IndexOf(':winmint_boot_probe', $probeCheck + 1, [StringComparison]::Ordinal)
 if ($probeCheck -lt 0 -or $diskDiscovery -le $probeCheck -or $probeLabel -lt 0) {
     throw 'WinPE boot probe must branch before target-disk discovery'
+}
+$armCheck = $launch.IndexOf('if not exist "%INSTALL%:\winmint-install.txt"', [StringComparison]::Ordinal)
+$diskpartAt = $launch.IndexOf('diskpart /s', [StringComparison]::Ordinal)
+if ($armCheck -lt 0 -or $armCheck -ge $diskDiscovery -or $armCheck -ge $diskpartAt) {
+    throw 'WinPE must read winmint-install.txt before it resolves the boot disk'
 }
 if ($launch.Substring($probeLabel) -notmatch 'WINMINT USB BOOT PROBE PASSED' `
     -or $launch.Substring($probeLabel) -notmatch 'winmint\.usb-boot-probe/v1' `
@@ -128,6 +133,9 @@ foreach ($required in @('IsBoot', 'IsSystem', 'is not the probe VHD')) {
 if ($image.IndexOf('Test-WinMintUsbReceiptContent', [StringComparison]::Ordinal) -ge 0) {
     throw 'USB test-image builder must verify through Write-WinMintUsbPartitionContent'
 }
+if ($image -match 'winmint-install\.txt' -or $layout -match 'winmint-install\.txt' -or $writer -match 'winmint-install\.txt') {
+    throw 'USB publish, test-image builder, and layout must not plant winmint-install.txt'
+}
 foreach ($forbidden in @(
         'Install-WinMintProbeLauncher',
         'replace LaunchApply.cmd',
@@ -144,6 +152,96 @@ foreach ($source in @($static, $image)) {
     if ($source -notmatch 'UsbMediaLayout\.ps1') {
         throw 'USB tools must dot-source UsbMediaLayout.ps1'
     }
+}
+
+$launchLines = @($launch -split '\r?\n')
+$gateStart = [array]::IndexOf($launchLines, 'for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
+$gateStop = [array]::IndexOf($launchLines, 'call :winmint_find_install')
+$seeStart = [array]::IndexOf($launchLines, ':winmint_see_payload')
+$seeStop = [array]::IndexOf($launchLines, ':winmint_find_install')
+if ($gateStart -lt 0 -or $gateStop -le $gateStart -or $seeStart -lt 0 -or $seeStop -le $seeStart) {
+    throw 'LaunchApply arm gate layout changed — update this test'
+}
+$gate = foreach ($line in $launchLines[$gateStart..$gateStop]) {
+    if ($line -eq 'call :winmint_find_install') {
+        'echo ARMED'
+        'exit /b 0'
+    }
+    elseif ($line -match 'wpeutil') { 'echo SHUTDOWN' }
+    else { $line }
+}
+$harness = @('@echo off', 'setlocal EnableExtensions') + @($gate) + @(
+    ':winmint_boot_probe',
+    'echo PROBE',
+    'exit /b 0',
+    ':winmint_finished',
+    'echo FINISHED',
+    'exit /b 0'
+) + @($launchLines[$seeStart..($seeStop - 1)])
+foreach ($line in $harness) {
+    if ($line.Trim() -match '^(rem\b|::)') { continue }
+    foreach ($danger in @('diskpart', 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format')) {
+        if ($line -match $danger) { throw "refusing to run the arm gate: '$danger' leaked into the harness" }
+    }
+}
+$cmdPath = Join-Path $env:TEMP ('winmint-arm-gate-' + [guid]::NewGuid().ToString('N') + '.cmd')
+$usb = Join-Path $env:TEMP ('winmint-arm-usb-' + [guid]::NewGuid().ToString('N'))
+Set-Content -LiteralPath $cmdPath -Value ($harness -join "`r`n") -Encoding ascii
+foreach ($letter in @('C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'Y', 'Z')) {
+    if ((Test-Path -LiteralPath "${letter}:\usb-media.json") -and (Test-Path -LiteralPath "${letter}:\sources\install.wim")) {
+        throw "arm gate harness needs no real payload volume; ${letter}: already has usb-media.json and sources\install.wim"
+    }
+}
+New-Item -ItemType Directory -Force -Path (Join-Path $usb 'sources') | Out-Null
+& subst Z: /D 2>&1 | Out-Null
+& subst Z: $usb
+if ($LASTEXITCODE -ne 0) { throw 'cannot map Z: for the arm gate' }
+[IO.File]::WriteAllText('Z:\usb-media.json', '{}')
+[IO.File]::WriteAllText('Z:\sources\install.wim', 'wim')
+function Assert-InstallGate {
+    param([string] $Name, [string] $Token, [scriptblock] $Arrange)
+    Get-ChildItem -LiteralPath 'Z:\' -Force | Where-Object { $_.Name -like 'winmint-*' } | Remove-Item -Force
+    & $Arrange
+    $got = @(& cmd /c "`"$cmdPath`"" 2>&1 | ForEach-Object { "$_" })
+    if ($got -cnotcontains $Token) {
+        throw "$Name expected $Token`n$($got -join "`n")"
+    }
+    foreach ($other in @('PROBE', 'SHUTDOWN', 'ARMED', 'FINISHED') | Where-Object { $_ -cne $Token }) {
+        if ($got -ccontains $other) { throw "$Name also printed $other`n$($got -join "`n")" }
+    }
+}
+try {
+    Assert-InstallGate 'probe file shuts the probe branch' 'PROBE' {
+        [IO.File]::WriteAllText('Z:\winmint-boot-probe.txt', 'probe')
+        [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install')
+    }
+    Assert-InstallGate 'missing install file shuts down' 'SHUTDOWN' { }
+    if ((@(& cmd /c "`"$cmdPath`"" 2>&1 | ForEach-Object { "$_" }) -join "`n") -notmatch 'install file is not present') {
+        throw 'a stick without the install file must say the install file is not present'
+    }
+    Assert-InstallGate 'reinstall without the install file shuts down' 'SHUTDOWN' {
+        [IO.File]::WriteAllText('Z:\winmint-reinstall.txt', 'again')
+    }
+    if (-not (Test-Path -LiteralPath 'Z:\winmint-reinstall.txt')) {
+        throw 'reinstall request must stay until the install file is present'
+    }
+    Assert-InstallGate 'install file reaches install' 'ARMED' { [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install') }
+    Assert-InstallGate 'reinstall with the install file reaches install' 'ARMED' {
+        [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install')
+        [IO.File]::WriteAllText('Z:\winmint-reinstall.txt', 'again')
+    }
+    if (Test-Path -LiteralPath 'Z:\winmint-reinstall.txt') { throw 'reinstall request must be consumed' }
+    Assert-InstallGate 'reinstall after a finished apply reaches install' 'ARMED' {
+        [IO.File]::WriteAllText('Z:\winmint-install.txt', 'install')
+        [IO.File]::WriteAllText('Z:\winmint-applied.txt', 'done')
+        [IO.File]::WriteAllText('Z:\winmint-reinstall.txt', 'again')
+    }
+    Assert-InstallGate 'applied marker finishes' 'FINISHED' { [IO.File]::WriteAllText('Z:\winmint-applied.txt', 'done') }
+}
+finally {
+    & subst Z: /D 2>&1 | Out-Null
+    Remove-Item -LiteralPath $usb -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $cmdPath -Force -ErrorAction SilentlyContinue
 }
 
 Write-Output 'Test-UsbBootProbe ok'

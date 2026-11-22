@@ -15,20 +15,27 @@ foreach ($relative in @('payload/winpe/LaunchApply.cmd')) {
     $lines = @($text -split '\r?\n')
 
     $walk = @($lines | Where-Object { $_ -match 'for %%d in \(' })
-    if ($walk.Count -ne 1) {
-        throw "$relative must walk install volumes once"
+    if ($walk.Count -ne 2) {
+        throw "$relative must walk letters twice: once to read markers, once to accept the boot disk"
     }
-    if ($walk[0] -notmatch [regex]::Escape("for %%d in ($letters)")) {
-        throw "$relative must walk $letters in that order"
+    $seenAssign = 'if not defined SEEN if exist %%d:\usb-media.json if exist %%d:\sources\install.wim set "SEEN=%%d"'
+    $seen = @($lines | Where-Object { $_.Trim() -eq $seenAssign })
+    if ($seen.Count -ne 1) {
+        throw "$relative must record a payload letter without setting INSTALL"
     }
-    $listed = [regex]::Match($walk[0], 'for %%d in \((?<letters>[^)]*)\)').Groups['letters'].Value
-    foreach ($letter in ($listed -split '\s+' | Where-Object { $_ })) {
-        if ($letter -ceq 'X') {
+    foreach ($one in $walk) {
+        if ($one -notmatch [regex]::Escape("for %%d in ($letters)")) {
+            throw "$relative must walk $letters in that order"
+        }
+        $listed = [regex]::Match($one, 'for %%d in \((?<letters>[^)]*)\)').Groups['letters'].Value
+        foreach ($letter in ($listed -split '\s+' | Where-Object { $_ })) {
+            if ($letter -ceq 'X') {
+                throw "$relative must not include X in the letter list"
+            }
+        }
+        if ($listed -match '(?i)(^|\s)X(\s|$)') {
             throw "$relative must not include X in the letter list"
         }
-    }
-    if ($listed -match '(?i)(^|\s)X(\s|$)') {
-        throw "$relative must not include X in the letter list"
     }
 
     $sets = @($lines | Where-Object { $_ -match 'call :winmint_accept_install %%d' })
