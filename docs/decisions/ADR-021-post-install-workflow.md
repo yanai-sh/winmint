@@ -1,9 +1,11 @@
-# ADR-020: Post-install workflow is stock install, Live posture, then dotfiles
+# ADR-021: Post-install workflow is stock install, Live posture, then dotfiles
 
 **Status:** Accepted · **Date:** 2026-10-26  
 **Clarifies:** [ADR-018](ADR-018-maintainer-only-until-usable.md) (Live posture is the operator path)
 
 ### Context
+
+Numbered 021 because ADR-020 is the install-file gate.
 
 No WinMint-built USB has booted the SL7 yet. Until a WinMint USB install is proven on real Secure Boot hardware, the maintainer installs Windows from stock Microsoft media and finishes the machine afterwards.
 

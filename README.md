@@ -28,7 +28,7 @@ Until a WinMint USB install is proven, the maintainer's machine is set up in thi
 4. Run the [dotfiles](https://github.com/yanai-sh/dotfiles) bootstrap.
 5. Install WSL.
 
-Live posture does not install packages, fonts, shell profiles, or desktop surfaces ([ADR-020](docs/decisions/ADR-020-post-install-workflow.md)).
+Live posture does not install packages, fonts, shell profiles, or desktop surfaces ([ADR-021](docs/decisions/ADR-021-post-install-workflow.md)).
 
 Registry scripts are the files in `post-install/registry/`. OneDrive, the inbox strip, and Surface drivers sit next to `Apply-LivePosture.ps1`. Each script also runs on its own from any folder. A second run leaves the same result. `Apply-LivePosture.ps1` finds its scripts next to itself, or under `registry\` beside it.
 
