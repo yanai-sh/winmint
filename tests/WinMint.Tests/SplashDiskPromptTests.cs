@@ -75,8 +75,8 @@ public class SplashDiskPromptTests
     public void Prompt_copy_names_the_disk_and_says_it_was_not_erased()
     {
         Assert.Equal("Target disk", SplashDiskPrompt.Heading);
-        Assert.Equal("Choose this disk", SplashDiskPrompt.Action);
-        Assert.Contains("Nothing is selected", SplashDiskPrompt.Lead, StringComparison.Ordinal);
+        Assert.Equal("Nothing is selected until you press Enter.", SplashDiskPrompt.Lead);
+        Assert.Equal("Disk 2  29 GB", SplashDiskPrompt.RowLabel(new SplashDisk(2, "29 GB", "")));
         Assert.Equal("2 disks listed.", SplashDiskPrompt.Fact(2));
         Assert.Equal("No disk was listed.", SplashDiskPrompt.Fact(0));
         Assert.Equal(
@@ -113,23 +113,16 @@ public class SplashDiskPromptTests
         foreach (string fact in facts)
         {
             SplashDiskPrompt.PromptLayout layout = SplashDiskPrompt.Measure(width, height, 96, 3, minY, fact);
-            int rightGap = width - layout.HeadingBox.Right;
+            int rightGap = width - layout.Status.Right;
+            int bottom = layout.List.H == 0 ? layout.Status.Bottom : layout.List.Bottom;
 
             Assert.Equal(0, layout.Mark.H);
-            Assert.True(layout.HeadingBox.Y >= minY);
+            Assert.True(layout.Status.Y >= minY);
             Assert.InRange(Math.Abs(layout.Margin - rightGap), 0, 1);
-            Assert.True(layout.HeadingBox.Y < layout.LeadBox.Y);
-            Assert.True(layout.LeadBox.Bottom <= layout.FactBox.Y);
-            Assert.True(layout.FactBox.Bottom <= layout.List.Y);
-            Assert.True(layout.LeadBox.H >= 48);
-            Assert.True(layout.HeadingBox.Y < layout.List.Y);
-            Assert.True(layout.Button.Y >= layout.List.Bottom);
-            Assert.True(layout.Button.Bottom <= height - 24);
-            Assert.True(layout.RowHeight >= 44);
-            Assert.True(layout.Button.H >= 44);
-            Assert.Equal(layout.HeadingBox.X, layout.List.X);
-            Assert.Equal(layout.HeadingBox.X, layout.Button.X);
-            Assert.Equal(layout.HeadingBox.Right, layout.List.Right);
+            Assert.True(layout.Status.Bottom <= layout.List.Y);
+            Assert.True(bottom <= height - 24);
+            Assert.Equal(layout.Status.X, layout.List.X);
+            Assert.Equal(layout.Status.Right, layout.List.Right);
         }
     }
 }

@@ -111,7 +111,6 @@ internal static class ApplyBootSplash
         private int _upHeld;
         private int _downHeld;
         private int _enterHeld;
-        private bool _pressed;
         private int _dpi = 96;
         private bool _shown;
         private bool _disposed;
@@ -260,13 +259,6 @@ internal static class ApplyBootSplash
             changed |= Edge(VkUp, ref _upHeld, allowRepeat: true, () => Move(-1));
             changed |= Edge(VkDown, ref _downHeld, allowRepeat: true, () => Move(1));
             changed |= Edge(VkReturn, ref _enterHeld, allowRepeat: false, Confirm);
-            bool pressed = _enterHeld > 0 && _focus >= 0;
-            if (pressed != _pressed)
-            {
-                _pressed = pressed;
-                changed = true;
-            }
-
             return changed;
         }
 
@@ -423,7 +415,7 @@ internal static class ApplyBootSplash
 
                 if (_picker && _painter is not null)
                 {
-                    _painter.Paint(hdc, rect, _dpi, _disks, _focus, _marked, _pressed);
+                    _painter.Paint(hdc, rect, _dpi, _disks, _focus, _marked);
                     return;
                 }
 
