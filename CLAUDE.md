@@ -8,6 +8,10 @@ Reach from there: glossary [CONTEXT.md](CONTEXT.md) · why [docs/decisions/](doc
 
 GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/decisions/`. See `docs/agents/domain.md`.
