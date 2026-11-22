@@ -115,6 +115,20 @@ function Get-WinPeApplyDefect {
         if ($body -notmatch '/setreimage /path R:\\Recovery\\WindowsRE /target W:\\Windows') {
             $defects += 'LaunchApply.cmd must register WinRE from R:\Recovery\WindowsRE'
         }
+        # A bare wpeinit waits on Wi-Fi DHCP. The blue desktop never reaches shutdown.
+        $earlyAt = $body.IndexOf('if not exist "%SEEN%:\winmint-install.txt"')
+        $initAt = $body.IndexOf('call :winmint_init_pe')
+        $longAt = $body.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
+        if ($earlyAt -lt 0 -or $initAt -lt 0 -or $longAt -lt 0 -or $earlyAt -ge $initAt -or $initAt -ge $longAt -or
+            $body -notmatch 'wpeinit -unattend:"%~dp0wpeinit\.xml"' -or $body -match '(?m)^call wpeinit\s*$') {
+            $defects += 'LaunchApply.cmd must shut down a missing install file before wpeinit, and wpeinit must disable the network'
+        }
+    }
+
+    $wpeXml = Join-Path $MountDir 'Windows\System32\wpeinit.xml'
+    if (-not (Test-Path -LiteralPath $wpeXml -PathType Leaf) -or
+        (Get-Content -LiteralPath $wpeXml -Raw -Encoding utf8) -notmatch '<EnableNetwork>\s*false\s*</EnableNetwork>') {
+        $defects += 'wpeinit.xml must set EnableNetwork false'
     }
 
     if (-not (Test-Path -LiteralPath $winpeshl)) {
@@ -137,8 +151,8 @@ function Get-WinPeApplyDefect {
         $defects += 'WinMintApply.exe bytes differ from work payload'
     }
 
-    # Learn: WinPE paints windows\system32\winpe.jpg as the desktop. A black frame is the boot
-    # surface; the apply splash draws on that, not on the stock blue wallpaper.
+    # Learn: WinPE paints windows\system32\winpe.jpg as the desktop. A 1x1 file does not cover
+    # the panel, so the stock blue field stays up. The frame has to be a real baseline JPEG.
     $desktop = Join-Path $MountDir 'Windows\System32\winpe.jpg'
     $desktopSrc = Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'winpe.jpg'
     if (-not (Test-Path -LiteralPath $desktop -PathType Leaf)) {
@@ -151,8 +165,45 @@ function Get-WinPeApplyDefect {
         (Get-FileHash -LiteralPath $desktopSrc -Algorithm SHA256).Hash) {
         $defects += 'winpe.jpg bytes differ from payload/winpe/winpe.jpg'
     }
+    elseif (-not (Test-WinMintWinPeDesktopJpeg -Path $desktop)) {
+        $defects += 'winpe.jpg must be a baseline JPEG at least 640x480 (a 1x1 file leaves the stock blue desktop)'
+    }
 
     return , ([string[]] $defects)
+}
+
+function Test-WinMintWinPeDesktopJpeg {
+    <#
+    .SYNOPSIS
+      Baseline JPEG large enough that center, tile, or stretch covers the WinPE desktop.
+      Cast before the shift: a [byte] shift drops the high half and a 2880-wide frame reads as 64.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 10 -or $bytes[0] -ne 0xFF -or $bytes[1] -ne 0xD8) { return $false }
+    $i = 2
+    while ($i -lt ($bytes.Length - 9)) {
+        if ($bytes[$i] -ne 0xFF) { $i++; continue }
+        $marker = [int] $bytes[$i + 1]
+        if ($marker -eq 0x00 -or $marker -eq 0xD8 -or $marker -eq 0xD9 -or $marker -eq 0x01 -or
+            ($marker -ge 0xD0 -and $marker -le 0xD7)) {
+            $i += 2
+            continue
+        }
+        $length = ([int] $bytes[$i + 2] -shl 8) -bor [int] $bytes[$i + 3]
+        if ($marker -ge 0xC0 -and $marker -le 0xCF -and $marker -ne 0xC4 -and $marker -ne 0xC8 -and $marker -ne 0xCC) {
+            if ($marker -ne 0xC0) { return $false }
+            $height = ([int] $bytes[$i + 5] -shl 8) -bor [int] $bytes[$i + 6]
+            $width = ([int] $bytes[$i + 7] -shl 8) -bor [int] $bytes[$i + 8]
+            return $width -ge 640 -and $height -ge 480
+        }
+        if ($marker -eq 0xDA -or $length -lt 2) { return $false }
+        $i += 2 + $length
+    }
+    return $false
 }
 
 function Get-WinPeWimIndex {

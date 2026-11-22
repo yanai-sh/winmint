@@ -247,6 +247,10 @@ function Assert-Contract {
         if (Test-Path -LiteralPath $jpgSrc -PathType Leaf) {
             Copy-Item -LiteralPath $jpgSrc -Destination (Join-Path $system32 'winpe.jpg') -Force
         }
+        $wpeSrc = Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'wpeinit.xml'
+        if (Test-Path -LiteralPath $wpeSrc -PathType Leaf) {
+            Copy-Item -LiteralPath $wpeSrc -Destination (Join-Path $system32 'wpeinit.xml') -Force
+        }
     }
     if (-not $NoWorkHelper) {
         $payloadDir = Join-Path $contractWork 'payload'
@@ -282,6 +286,17 @@ try {
     Assert-Contract 'helper bytes mismatch rejected' $shipped $winpeshl 'bytes differ from work payload' -HelperMismatch
     Assert-Contract 'helper source missing rejected' $shipped $winpeshl 'helper source missing' -NoWorkHelper
     Assert-Contract 'stock blue desktop rejected' $shipped $winpeshl 'winpe.jpg missing' -NoDesktop
+    $tinyJpeg = Join-Path $env:TEMP ('winmint-tiny-jpg-' + [guid]::NewGuid().ToString('N'))
+    # SOF0 1x1. WinPE does not stretch that across the panel.
+    [IO.File]::WriteAllBytes($tinyJpeg, [byte[]]@(
+            0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xD9))
+    if (Test-WinMintWinPeDesktopJpeg -Path $tinyJpeg) {
+        $script:failures += '1x1 baseline JPEG must be rejected'
+    }
+    Remove-Item -LiteralPath $tinyJpeg -Force -ErrorAction SilentlyContinue
+    if (-not (Test-WinMintWinPeDesktopJpeg -Path (Join-Path (Split-Path -Parent (Get-WinPeApplyPayloadPath)) 'winpe.jpg'))) {
+        $script:failures += 'payload winpe.jpg must be a baseline JPEG at least 640x480'
+    }
 }
 finally {
     Remove-Item -LiteralPath $mount, $contractWork -Recurse -Force -ErrorAction SilentlyContinue

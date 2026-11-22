@@ -34,7 +34,7 @@ foreach ($relativePath in @('sources/boot.wim', 'sources/install.wim')) {
 }
 
 # Same defects publish refuses, without a second DISM mount. wimlib extract is the
-# stand-in for a read-only mount of the four files Get-WinPeApplyDefect reads.
+# stand-in for a read-only mount of the files Get-WinPeApplyDefect reads.
 $bootWim = Resolve-WinMintUsbEntryPath -Root $mediaDir -RelativePath 'sources/boot.wim'
 $bootInfo = & $wimlib info $bootWim 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) {
@@ -46,7 +46,8 @@ $applyPaths = @(
     'Windows/System32/LaunchApply.cmd',
     'Windows/System32/winpeshl.ini',
     'Windows/System32/WinMintApply.exe',
-    'Windows/System32/winpe.jpg'
+    'Windows/System32/winpe.jpg',
+    'Windows/System32/wpeinit.xml'
 )
 $extractRoot = Join-Path ([IO.Path]::GetTempPath()) ('winmint-usb-static-boot-' + [guid]::NewGuid().ToString('N'))
 try {

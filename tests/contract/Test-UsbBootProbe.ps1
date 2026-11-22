@@ -19,6 +19,12 @@ $diskpartAt = $launch.IndexOf('diskpart /s', [StringComparison]::Ordinal)
 if ($armCheck -lt 0 -or $armCheck -ge $diskDiscovery -or $armCheck -ge $diskpartAt) {
     throw 'WinPE must read winmint-install.txt before it resolves the boot disk'
 }
+$unarmedAt = $launch.IndexOf('install file is not present', [StringComparison]::Ordinal)
+$initPeAt = $launch.IndexOf('call :winmint_init_pe', [StringComparison]::Ordinal)
+$seenLoopAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload', [StringComparison]::Ordinal)
+if ($unarmedAt -lt 0 -or $initPeAt -le $unarmedAt -or $seenLoopAt -le $initPeAt) {
+    throw 'unarmed shutdown must run before call :winmint_init_pe, and that call must run before the payload search'
+}
 $confirmAt = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined PAYLOADDISK call :winmint_find_install', [StringComparison]::Ordinal)
 $reinstallDel = $launch.IndexOf('del /f /q "%INSTALL%:\winmint-reinstall.txt"', [StringComparison]::Ordinal)
 $bootMiss = $launch.IndexOf('install.wim not found on the boot disk', [StringComparison]::Ordinal)
@@ -160,6 +166,18 @@ foreach ($source in @($static, $image)) {
     }
 }
 
+$early = $launch.IndexOf('if not exist "%SEEN%:\winmint-install.txt"')
+$init = $launch.IndexOf('call :winmint_init_pe')
+$long = $launch.IndexOf('for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
+if ($early -lt 0 -or $init -le $early -or $long -le $init) {
+    throw 'a missing install file must shut down before wpeinit, and wpeinit before the long payload search'
+}
+if ($launch -match '(?m)^call wpeinit\s*$') { throw 'LaunchApply must not call bare wpeinit' }
+$wpeXml = Join-Path $repo 'payload/winpe/wpeinit.xml'
+if ((Get-Content -LiteralPath $wpeXml -Raw -Encoding utf8) -notmatch '<EnableNetwork>\s*false\s*</EnableNetwork>') {
+    throw 'wpeinit.xml must set EnableNetwork false'
+}
+
 $launchLines = @($launch -split '\r?\n')
 $gateStart = [array]::IndexOf($launchLines, 'for /L %%i in (1,1,10) do if not defined SEEN call :winmint_see_payload')
 $gateStop = [array]::IndexOf($launchLines, 'set WORK=%TEMP%\winmint')
@@ -189,7 +207,7 @@ $harness = @('@echo off', 'setlocal EnableExtensions') + @($gate) + @(
 ) + @($launchLines[$seeStart..($seeStop - 1)])
 foreach ($line in $harness) {
     if ($line.Trim() -match '^(rem\b|::)') { continue }
-    foreach ($danger in @('diskpart', 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'format')) {
+    foreach ($danger in @('diskpart', 'clean', 'Apply-Image', 'bcdboot', 'wpeutil', 'wpeinit', 'format')) {
         if ($line -match $danger) { throw "refusing to run the install-file gate: '$danger' leaked into the harness" }
     }
 }
