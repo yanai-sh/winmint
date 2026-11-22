@@ -217,21 +217,39 @@ function Write-WinMintUsbPartitionContent {
     $bootPartition = $null
     $payloadPartition = $null
     try {
-        Initialize-Disk -Number $DiskNumber -PartitionStyle GPT -ErrorAction Stop | Out-Null
+        # Partition removal can leave PartitionStyle GPT.
+        # Initialize-Disk only accepts RAW; an empty GPT disk is already usable.
+        $current = Get-Disk -Number $DiskNumber -ErrorAction Stop
+        if (@(Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue).Count -gt 0) {
+            throw "USB disk $DiskNumber still has partitions after clear"
+        }
+        if ([string] $current.PartitionStyle -eq 'RAW') {
+            Initialize-Disk -Number $DiskNumber -PartitionStyle GPT -ErrorAction Stop | Out-Null
+        }
+        elseif ([string] $current.PartitionStyle -cne 'GPT') {
+            throw "USB disk $DiskNumber partition style is $($current.PartitionStyle) after clear"
+        }
         $bootPartition = New-Partition -DiskNumber $DiskNumber `
             -Size ([long] $Receipt.Document.layout.boot.partitionBytes) `
             -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -ErrorAction Stop
         $payloadPartition = New-Partition -DiskNumber $DiskNumber -UseMaximumSize `
             -GptType '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}' -ErrorAction Stop
         foreach ($partition in @($bootPartition, $payloadPartition)) {
-            Set-Partition -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber `
-                -NoDefaultDriveLetter $true -ErrorAction Stop
+            try {
+                Set-Partition -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber `
+                    -NoDefaultDriveLetter $true -ErrorAction Stop
+            }
+            catch {
+                # Removable USB rejects this attribute. A letter assigned later is removed below.
+                if ($_.Exception.Message -notmatch 'Not Supported') { throw }
+            }
         }
         $bootPartition | Format-Volume -FileSystem FAT32 -NewFileSystemLabel 'WINMINT_BOOT' `
             -Force -Confirm:$false -ErrorAction Stop | Out-Null
         $payloadPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'WINMINT' `
             -Force -Confirm:$false -ErrorAction Stop | Out-Null
         foreach ($partition in @($bootPartition, $payloadPartition)) {
+            Remove-WinMintUsbDriveLetter -DiskNumber $DiskNumber -Partition $partition
             $current = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $partition.PartitionNumber
             $letterPath = @($current.AccessPaths) | Where-Object { [string] $_ -match '^[A-Za-z]:' } | Select-Object -First 1
             if ($null -ne $letterPath) {
