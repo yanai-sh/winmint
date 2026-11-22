@@ -99,7 +99,7 @@ set DP=%WORK%\diskpart.txt
   echo attributes disk clear readonly noerr
   echo clean
   echo convert gpt
-  echo create partition efi size=100
+  echo create partition efi size=300
   echo format quick fs=fat32 label=System
   echo assign letter=S
   echo create partition msr size=16

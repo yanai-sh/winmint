@@ -201,7 +201,7 @@ if ($bootLeafRaw.Count -gt 0 -and $bootPackages.Count -lt $bootLeafRaw.Count) {
 }
 $applyQuality = $bootPackages.Count -gt 0
 
-# Spike #70: 3-partition GPT (EFI 100 MB, MSR 16 MB, primary) — WinPE apply disk layout.
+# Spike #70: 3-partition GPT (EFI 300 MB, MSR 16 MB, primary) — WinPE apply disk layout.
 # LabConfig on applied-image SYSTEM hive (not boot.wim) — Hyper-V no-vTPM VMs read it at first boot.
 $bootWim = Join-Path $mediaDir 'sources\boot.wim'
 $bootMarker = Join-Path $mediaDir 'sources\.winmint-boot-apply'

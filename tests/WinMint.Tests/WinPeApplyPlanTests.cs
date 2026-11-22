@@ -132,6 +132,8 @@ public class WinPeApplyPlanTests
             payload.IndexOf("call :winmint_find_install", StringComparison.Ordinal)
                 < payload.IndexOf("echo clean", StringComparison.Ordinal),
             "The WinPE boot disk must be resolved before diskpart clean.");
+        Assert.Contains("create partition efi size=300", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("size=100", payload, StringComparison.Ordinal);
 
         foreach (string reader in new[] { patcher, gate })
         {
