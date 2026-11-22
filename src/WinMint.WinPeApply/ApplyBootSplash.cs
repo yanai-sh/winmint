@@ -129,6 +129,7 @@ internal static class ApplyBootSplash
                 StringComparison.Ordinal);
             _picker = disks is not null;
             _disks = disks ?? [];
+            _focus = _picker ? SplashDiskPrompt.InitialFocus(_disks.Count) : -1;
         }
 
         public bool Start()

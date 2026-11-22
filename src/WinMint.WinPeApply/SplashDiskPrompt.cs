@@ -7,8 +7,8 @@ using Windows.Win32.Graphics.Gdi;
 namespace WinMint.WinPeApply;
 
 /// <summary>
-/// Centered disk lines under the large lockup. A mint asterisk marks the focused row.
-/// Arrow keys and a click move it. Enter marks that disk. There is no second control.
+/// Centered disk lines under the large lockup. The first disk starts focused.
+/// A mint asterisk marks that row. Arrow keys and a click move it. Enter marks that disk.
 /// </summary>
 internal static class SplashDiskPrompt
 {
@@ -19,6 +19,8 @@ internal static class SplashDiskPrompt
     internal const int HeroGap = 16;
 
     internal static int PromptTop(int heroBottom, int dpi) => heroBottom + Px(HeroGap, dpi);
+
+    internal static int InitialFocus(int count) => count > 0 ? 0 : -1;
 
     internal static string Fact(int count)
     {
